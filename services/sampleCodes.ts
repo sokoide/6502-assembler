@@ -8,6 +8,7 @@ export const sampleCodes: SampleCode[] = [
   {
     name: "1. Basic Storage",
     code: `\t.org $0200\n
+start:
 \tLDA #$01
 \tSTA $0300
 \tLDA #$05
@@ -19,6 +20,7 @@ export const sampleCodes: SampleCode[] = [
   {
     name: "2. Labels & Infinite Loop",
     code: `\t.org $0200\n
+start:
 \tLDA #$01
 \tSTA $0300
 loop:
@@ -28,6 +30,7 @@ loop:
   {
     name: "3. Load from Memory",
     code: `\t.org $0200\n
+start:
 \tLDA #$C0
 \tSTA $00     ; Store $C0 in address $00 (Zero Page)
 \tLDA $00     ; Load the value from address $00
@@ -37,6 +40,7 @@ loop:
   {
     name: "4. LDX, LDY, STX, STY",
     code: `\t.org $0200\n
+start:
 \tLDX #$0A
 \tLDY #$0B
 \tSTX $0300
@@ -46,6 +50,7 @@ loop:
   {
     name: "5. Branching (BNE)",
     code: `\t.org $0200\n
+start:
 \tLDX #$05
 countdown:
 \t  DEX
@@ -58,6 +63,7 @@ countdown:
   {
     name: "6. Subroutine (JSR/RTS)",
     code: `\t.org $0200\n
+start:
 \tJSR setup_values
 \tLDA #$01      ; Executed after RTS
 \tSTA $0300
@@ -73,6 +79,7 @@ setup_values:
   {
     name: "7. Stack Operations",
     code: `\t.org $0200\n
+start:
 \tLDA #$AA
 \tPHA       ; Push A ($AA) onto stack
 \tLDA #$BB  ; A is now $BB
@@ -86,6 +93,7 @@ setup_values:
   {
     name: "8. Fill Memory Loop (Absolute,X)",
     code: `\t.org $0200\n
+start:
 \tLDX #$00
 \tLDA #$42    ; Value to store
 fill_loop:
@@ -98,6 +106,7 @@ fill_loop:
   {
     name: "9. Compare and Branch (BEQ)",
     code: `\t.org $0200\n
+start:
 \tLDA #$10
 \tCMP #$10  ; Compare A with #$10
 \tBEQ equal ; Branch if A == #$10
@@ -113,6 +122,7 @@ done:
   {
     name: "10. Indirect Addressing (ZP),Y",
     code: `\t.org $0200\n
+start:
 \tLDA #$00    ; Low byte of pointer ($30)
 \tSTA $30     ; Store at ZP address $30
 \tLDA #$03    ; High byte of pointer ($03 for $0300)
@@ -131,6 +141,7 @@ done:
   {
     name: "11. Low/High Byte Immediate",
     code: `\t.org $0200\n
+start:
 ; assuming org is $0200, so target_label is $020B
 \tLDX #<target_label ; X = $0B
 \tSTX $0300

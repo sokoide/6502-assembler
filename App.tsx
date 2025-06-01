@@ -6,13 +6,18 @@ import { ErrorDisplay } from './components/ErrorDisplay';
 import { assemble } from './services/assembler';
 import { sampleCodes } from './services/sampleCodes';
 
-const initialAssemblyCode = `\t.org $0200\n
-\tLDA #$C0
-\tLDX #$C1
-\tLDY #$C2
-\tSTA $00
-\tSTX $01
-\tSTY $02
+const initialAssemblyCode = `\t.org $0200
+; .org $0200 means the code starts at address $0200
+
+; 'start:' is a label, case-sensitive
+; the labe is not used (you can remove it)
+start:
+\tLDA #$C0 ; load $C0 int A register
+\tLDX #$C1 ; load $C1 into X register
+\tLDY #$C2 ; load $C2 into Y register
+\tSTA $00  ; store A into Zero Page address $00
+\tSTX $01  ; store X into Zero Page address $01
+\tSTY $02  ; store Y into Zero Page address $02
 loop:
 \tJMP loop
 `;
@@ -84,8 +89,8 @@ const App: React.FC = () => {
         <p className="text-xs text-gray-500 mt-1">Note: Labels are case-sensitive. Mnemonics are case-insensitive.</p>
       </header>
 
-      <div className="w-full max-w-5xl grid grid-cols-1 md:grid-cols-2 gap-6">
-        <div className="flex flex-col">
+      <div className="w-full max-w-5xl grid grid-cols-1 md:grid-cols-[minmax(0,600px)_400px] gap-6">
+        <div className="flex flex-col font-mono text-base" style={{ tabSize: 2 }}>
           <div className="flex justify-between items-center mb-2">
             <h2 className="text-xl font-semibold text-sky-300">Assembly Code</h2>
           </div>
