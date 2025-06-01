@@ -1,0 +1,5 @@
+{
+  "name": "6502 Assembler Online",
+  "description": "A web-based 6502 assembler that converts 6502 assembly language code into machine code. Supports labels, common directives, and various addressing modes. Provides instant feedback and error reporting.",
+  "requestFramePermissions": []
+}
