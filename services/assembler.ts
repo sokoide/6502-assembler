@@ -6,7 +6,7 @@ const ORG_REGEX_FULL = /^(?:\*)\s*=\s*\$([0-9A-Fa-f]{1,4})|\.org\s+\$([0-9A-Fa-f
 const ORG_REGEX_PART = /^(\.org)\s+\$([0-9A-Fa-f]{1,4})$/i; // For use after label
 const STAR_ORG_REGEX_PART = /^(\*)\s*=\s*\$([0-9A-Fa-f]{1,4})$/i; // For use after label
 
-const EQU_REGEX = /^(EQU)\s+(.+)$/i;
+const EQU_REGEX = /(.+)\s+^(EQU)\s+(.+)$/i;
 const RES_REGEX = /^(\.RES)\s+(.+)$/i;
 const BYTE_REGEX = /^(\.BYTE)\s+(.+)$/i;
 
@@ -71,45 +71,19 @@ export function assemble(code: string): AssembleResult {
       currentLineLabel = labelMatch[1];
       contentAfterLabel = processedLine.substring(labelMatch[0].length).trim();
 
-      // Check if this label is defining an EQU
-      const equMatchForLabel = contentAfterLabel.match(EQU_REGEX);
-      if (equMatchForLabel) {
-        if (labels.has(currentLineLabel)) {
-          error = `Line ${lineNumber}: Duplicate label '${currentLineLabel}' defined. Original line: '${originalLine}'`;
-          return { machineCode: [], error };
-        }
-        const equValueStr = equMatchForLabel[2].trim();
-        const equValue = parseValue(equValueStr, labels, `EQU directive for ${currentLineLabel}`);
-        if (typeof equValue === 'string') {
-          error = `Line ${lineNumber}: ${equValue}. Original line: '${originalLine}'`;
-          return { machineCode: [], error };
-        }
-        labels.set(currentLineLabel, equValue);
-        parsedLines.push({
-          lineNumber,
-          originalLine,
-          address: equValue, // For EQU, address field stores the value
-          type: 'directive',
-          directive: 'EQU',
-          label: currentLineLabel,
-          value: equValue
-        } as ParsedEquDirectiveLine);
-        continue; // EQU consumes the entire line after label
-      } else {
-        // It's a location label
-        if (labels.has(currentLineLabel)) {
-          error = `Line ${lineNumber}: Duplicate label '${currentLineLabel}' defined. Original line: '${originalLine}'`;
-          return { machineCode: [], error };
-        }
-        labels.set(currentLineLabel, currentAddress);
-        parsedLines.push({
-          lineNumber,
-          originalLine: originalLine, // Store full original line for context if only label
-          address: currentAddress,
-          type: 'label',
-          label: currentLineLabel
-        });
+      // It's a location label
+      if (labels.has(currentLineLabel)) {
+        error = `Line ${lineNumber}: Duplicate label '${currentLineLabel}' defined. Original line: '${originalLine}'`;
+        return { machineCode: [], error };
       }
+      labels.set(currentLineLabel, currentAddress);
+      parsedLines.push({
+        lineNumber,
+        originalLine: originalLine, // Store full original line for context if only label
+        address: currentAddress,
+        type: 'label',
+        label: currentLineLabel
+      });
     }
 
     // 4. If contentAfterLabel is empty, the line was only a label (or label + comment).
@@ -153,6 +127,29 @@ export function assemble(code: string): AssembleResult {
       }
     }
 
+    // TODO: Check for EQU directive
+    // const equMatch = contentAfterLabel.match(EQU_REGEX);
+    // if (equMatch) {
+    //   const equVarStr = equMatchForLabel[1].trim();
+    //   const equVar = parseValue(equVarStr, labels, `var EQU directive`);
+    //   const equValueStr = equMatchForLabel[3].trim();
+    //   const equValue = parseValue(equValueStr, labels, `value EQU directive`);
+    //   if (typeof equValue === 'string') {
+    //     error = `Line ${lineNumber}: ${equValue}. Original line: '${originalLine}'`;
+    //     return { machineCode: [], error };
+    //   }
+    //   labels.set(currentLineLabel, equValue);
+    //   parsedLines.push({
+    //     lineNumber,
+    //     originalLine,
+    //     address: equValue, // For EQU, address field stores the value
+    //     type: 'directive',
+    //     directive: 'EQU',
+    //     label: currentLineLabel,
+    //     value: equValue
+    //   } as ParsedEquDirectiveLine);
+    //   continue;
+    // }
 
     // Check for .RES directive
     const resMatch = contentAfterLabel.match(RES_REGEX);
