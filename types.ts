@@ -23,8 +23,8 @@ export interface ParsedLabelDefinitionLine extends ParsedLineBase { // For label
 
 export interface ParsedOrgDirectiveLine extends ParsedLineBase {
   type: 'directive';
-  directive: 'ORG';
-  value: number; // Address for ORG
+  directive: '.org';
+  value: number; // Address for .org
 }
 
 export interface ParsedEquDirectiveLine extends ParsedLineBase {
@@ -49,7 +49,7 @@ export interface ParsedByteDirectiveLine extends ParsedLineBase {
 }
 
 export interface ParsedCommentOrEmptyLine extends ParsedLineBase {
-    type: 'comment' | 'empty';
+  type: 'comment' | 'empty';
 }
 
 

@@ -7,7 +7,7 @@ export interface SampleCode {
 export const sampleCodes: SampleCode[] = [
   {
     name: "1. Basic Storage",
-    code: `ORG $0200
+    code: `\t.org $0200\n
 LDA #$01
 STA $0300
 LDA #$05
@@ -18,7 +18,7 @@ BRK`
   },
   {
     name: "2. Labels & Infinite Loop",
-    code: `ORG $0200
+    code: `\t.org $0200\n
 LDA #$01
 STA $0300
 LOOP:
@@ -27,7 +27,7 @@ JMP LOOP`
   },
   {
     name: "3. Load from Memory",
-    code: `ORG $0200
+    code: `\t.org $0200\n
 LDA #$C0
 STA $00     ; Store $C0 in address $00 (Zero Page)
 LDA $00     ; Load the value from address $00
@@ -36,7 +36,7 @@ BRK`
   },
   {
     name: "4. LDX, LDY, STX, STY",
-    code: `ORG $0200
+    code: `\t.org $0200\n
 LDX #$0A
 LDY #$0B
 STX $0300
@@ -45,7 +45,7 @@ BRK`
   },
   {
     name: "5. Branching (BNE)",
-    code: `ORG $0200
+    code: `\t.org $0200\n
   LDX #$05
 COUNTDOWN:
   DEX
@@ -57,7 +57,7 @@ COUNTDOWN:
   },
   {
     name: "6. Subroutine (JSR/RTS)",
-    code: `ORG $0200
+    code: `\t.org $0200\n
   JSR SETUP_VALUES
   LDA #$01      ; Executed after RTS
   STA $0300
@@ -72,7 +72,7 @@ SETUP_VALUES:
   },
   {
     name: "7. Stack Operations",
-    code: `ORG $0200
+    code: `\t.org $0200\n
   LDA #$AA
   PHA       ; Push A ($AA) onto stack
   LDA #$BB  ; A is now $BB
@@ -85,7 +85,7 @@ SETUP_VALUES:
   },
   {
     name: "8. Fill Memory Loop (Absolute,X)",
-    code: `ORG $0200
+    code: `\t.org $0200\n
   LDX #$00
   LDA #$42    ; Value to store
 FILL_LOOP:
@@ -97,7 +97,7 @@ FILL_LOOP:
   },
   {
     name: "9. Compare and Branch (BEQ)",
-    code: `ORG $0200
+    code: `\t.org $0200\n
   LDA #$10
   CMP #$10  ; Compare A with #$10
   BEQ EQUAL ; Branch if A == #$10
@@ -112,7 +112,7 @@ DONE:
   },
   {
     name: "10. Indirect Addressing (ZP),Y",
-    code: `ORG $0200
+    code: `\t.org $0200\n
   LDA #$00    ; Low byte of pointer ($30)
   STA $30     ; Store at ZP address $30
   LDA #$03    ; High byte of pointer ($03 for $0300)
@@ -130,20 +130,15 @@ DONE:
   },
   {
     name: "11. Low/High Byte Immediate",
-    code: `ORG $0200
+    code: `\t.org $0200\n
 
-LDA #<$C0DE ; A = $DE
-STA $0300
-LDA #>$C0DE ; A = $C0
-STA $0301
-
-LDX #<TARGET_LABEL ; X = $00 (assuming ORG $0200, so TARGET_LABEL is $020A)
-STX $0302
+LDX #<TARGET_LABEL ; X = $0B (assuming org is $0200, so TARGET_LABEL is $020B)
+STX $0300
 LDY #>TARGET_LABEL ; Y = $02
-STY $0303
+STY $0301
 BRK
 
-TARGET_LABEL: NOP ; Address is $020A after BRK
+TARGET_LABEL: NOP ; Address is $0215 after BRK
 `
   }
 ];

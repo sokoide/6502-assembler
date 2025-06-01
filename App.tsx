@@ -6,15 +6,15 @@ import { ErrorDisplay } from './components/ErrorDisplay';
 import { assemble } from './services/assembler';
 import { sampleCodes } from './services/sampleCodes';
 
-const initialAssemblyCode = `ORG $0200
-LDA #$C0
-LDX #$C1
-LDY #$C2
-STA $00
-STX $01 ; Added to match example output
-STY $02
-LOOP:
-JMP LOOP
+const initialAssemblyCode = `\t.org $0200\n
+\tLDA #$C0
+\tLDX #$C1
+\tLDY #$C2
+\tSTA $00
+\tSTX $01
+\tSTY $02
+loop:
+\tJMP loop
 `;
 
 const App: React.FC = () => {
@@ -153,7 +153,6 @@ const App: React.FC = () => {
         <ul className="list-disc list-inside text-sm text-gray-300 space-y-1">
           <li>Supported directives:
             <code>ORG $XXXX</code>, <code>* = $XXXX</code> (set origin).
-            <code>LABEL: EQU VALUE</code> (define symbol as constant).
             <code>LABEL: .res COUNT</code> (reserve COUNT bytes).
             <code>LABEL: .byte VAL1, VAL2,...</code> (define byte data).
           </li>
@@ -161,10 +160,10 @@ const App: React.FC = () => {
           <li>Comments: Start with <code>;</code> (e.g., <code>; This is a comment</code>).</li>
           <li>Numbers & Values:
             <ul className="list-disc list-inside ml-4 text-xs text-gray-400">
-              <li>Hex: <code>#$FF</code> (imm), <code>$FF</code> (ZP), <code>$FFFF</code> (abs). For <code>EQU</code>, <code>.res</code>, <code>.byte</code>: <code>$HH</code>.</li>
-              <li>Decimal: <code>#123</code> (imm). For <code>EQU</code>, <code>.res</code>, <code>.byte</code>: <code>123</code>.</li>
+              <li>Hex: <code>#$FF</code> (imm), <code>$FF</code> (ZP), <code>$FFFF</code> (abs). For <code>.res</code>, <code>.byte</code>: <code>$HH</code>.</li>
+              <li>Decimal: <code>#123</code> (imm). For <code>.res</code>, <code>.byte</code>: <code>123</code>.</li>
               <li>Character (for <code>.byte</code>): <code>'A'</code>, <code>"B"</code> (ASCII value).</li>
-              <li>Labels (for <code>EQU</code>, <code>.res</code>, <code>.byte</code> values, and instruction operands).</li>
+              <li>Labels (for <code>.res</code>, <code>.byte</code> values, and instruction operands).</li>
               <li>Low/High byte (for immediate mode): <code>#&lt;$WORD</code>, <code>#&gt;$WORD</code>, <code>#&lt;LABEL</code>, <code>#&gt;LABEL</code>.</li>
             </ul>
           </li>
@@ -182,7 +181,7 @@ const App: React.FC = () => {
               <li>Implied/Accumulator: <code>NOP</code>, <code>INX</code>, <code>ASL A</code></li>
             </ul>
           </li>
-          <li>The example output from the prompt (<code>A9 C0 ... 4C 0C 02</code>) is achieved with the initially pre-filled code using <code>ORG $0200</code>, which means LOOP is at <code>$020C</code>, hence <code>JMP $020C</code> is <code>4C 0C 02</code>.</li>
+          <li>The example output from the prompt (<code>A9 C0 ... 4C 0C 02</code>) is achieved with the initially pre-filled code using <code>.org $0200</code>, which means LOOP is at <code>$020C</code>, hence <code>JMP $020C</code> is <code>4C 0C 02</code>.</li>
         </ul>
       </div>
 

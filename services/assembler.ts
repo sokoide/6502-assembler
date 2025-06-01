@@ -2,8 +2,8 @@
 import { instructionSet, InstructionVariant } from './opcodes';
 import type { ParsedLine, AssembleResult, LabelMap, ParsedResDirectiveLine, ParsedByteDirectiveLine, ParsedEquDirectiveLine } from '../types';
 
-const ORG_REGEX_FULL = /^(?:\*)\s*=\s*\$([0-9A-Fa-f]{1,4})|ORG\s+\$([0-9A-Fa-f]{1,4})$/i;
-const ORG_REGEX_PART = /^(ORG)\s+\$([0-9A-Fa-f]{1,4})$/i; // For use after label
+const ORG_REGEX_FULL = /^(?:\*)\s*=\s*\$([0-9A-Fa-f]{1,4})|\.org\s+\$([0-9A-Fa-f]{1,4})$/i;
+const ORG_REGEX_PART = /^(\.org)\s+\$([0-9A-Fa-f]{1,4})$/i; // For use after label
 const STAR_ORG_REGEX_PART = /^(\*)\s*=\s*\$([0-9A-Fa-f]{1,4})$/i; // For use after label
 
 const EQU_REGEX = /^(EQU)\s+(.+)$/i;
@@ -26,7 +26,7 @@ function parseValue(valueStr: string, labels: LabelMap, context: string): number
     const val = labels.get(s);
     if (val === undefined) return `Label '${s}' not found for ${context}`;
     return val;
-  } else if ((s.startsWith("'") && s.endsWith("'") && s.length === 3) || (s.startsWith('"') && s.endsWith('"') && s.length === 3) ) {
+  } else if ((s.startsWith("'") && s.endsWith("'") && s.length === 3) || (s.startsWith('"') && s.endsWith('"') && s.length === 3)) {
     return s.charCodeAt(1); // ASCII value of character
   }
   return `Invalid value format '${s}' for ${context}`;
@@ -57,8 +57,8 @@ export function assemble(code: string): AssembleResult {
     if (commentIndex !== -1) {
       processedLine = processedLine.substring(0, commentIndex).trim();
       if (processedLine === '') {
-           parsedLines.push({ lineNumber, originalLine, address: currentAddress, type: 'comment' });
-           continue;
+        parsedLines.push({ lineNumber, originalLine, address: currentAddress, type: 'comment' });
+        continue;
       }
     }
 
@@ -98,16 +98,16 @@ export function assemble(code: string): AssembleResult {
       } else {
         // It's a location label
         if (labels.has(currentLineLabel)) {
-            error = `Line ${lineNumber}: Duplicate label '${currentLineLabel}' defined. Original line: '${originalLine}'`;
-            return { machineCode: [], error };
+          error = `Line ${lineNumber}: Duplicate label '${currentLineLabel}' defined. Original line: '${originalLine}'`;
+          return { machineCode: [], error };
         }
         labels.set(currentLineLabel, currentAddress);
         parsedLines.push({
-            lineNumber,
-            originalLine: originalLine, // Store full original line for context if only label
-            address: currentAddress,
-            type: 'label',
-            label: currentLineLabel
+          lineNumber,
+          originalLine: originalLine, // Store full original line for context if only label
+          address: currentAddress,
+          type: 'label',
+          label: currentLineLabel
         });
       }
     }
@@ -121,36 +121,36 @@ export function assemble(code: string): AssembleResult {
     // Check for ORG directive (can't have a preceding label on the same line in this simplified model)
     // If currentLineLabel is null, it means ORG is not preceded by a label on this line.
     if (!currentLineLabel) {
-        const orgMatchGlobal = contentAfterLabel.match(ORG_REGEX_FULL);
-        if (orgMatchGlobal) {
-            currentAddress = parseInt(orgMatchGlobal[1] || orgMatchGlobal[2], 16);
-            parsedLines.push({
-                lineNumber,
-                originalLine,
-                address: currentAddress,
-                type: 'directive',
-                directive: 'ORG',
-                value: currentAddress
-            });
-            continue;
-        }
+      const orgMatchGlobal = contentAfterLabel.match(ORG_REGEX_FULL);
+      if (orgMatchGlobal) {
+        currentAddress = parseInt(orgMatchGlobal[1] || orgMatchGlobal[2], 16);
+        parsedLines.push({
+          lineNumber,
+          originalLine,
+          address: currentAddress,
+          type: 'directive',
+          directive: '.org',
+          value: currentAddress
+        });
+        continue;
+      }
     } else { // Label was present, check if ORG follows the label
-        const orgMatchPart = contentAfterLabel.match(ORG_REGEX_PART) || contentAfterLabel.match(STAR_ORG_REGEX_PART);
-        if (orgMatchPart) {
-             // The label before ORG points to the address *before* ORG takes effect.
-             // The ORG directive itself changes currentAddress for subsequent lines.
-            const orgValue = parseInt(orgMatchPart[2], 16);
-            parsedLines.push({
-                lineNumber,
-                originalLine,
-                address: orgValue, // The ORG directive's "address" is its value
-                type: 'directive',
-                directive: 'ORG',
-                value: orgValue
-            });
-            currentAddress = orgValue; // Update currentAddress for subsequent lines
-            continue;
-        }
+      const orgMatchPart = contentAfterLabel.match(ORG_REGEX_PART) || contentAfterLabel.match(STAR_ORG_REGEX_PART);
+      if (orgMatchPart) {
+        // The label before ORG points to the address *before* ORG takes effect.
+        // The ORG directive itself changes currentAddress for subsequent lines.
+        const orgValue = parseInt(orgMatchPart[2], 16);
+        parsedLines.push({
+          lineNumber,
+          originalLine,
+          address: orgValue, // The ORG directive's "address" is its value
+          type: 'directive',
+          directive: '.org',
+          value: orgValue
+        });
+        currentAddress = orgValue; // Update currentAddress for subsequent lines
+        continue;
+      }
     }
 
 
@@ -268,9 +268,9 @@ export function assemble(code: string): AssembleResult {
       }
       machineCode.push(...instructionBytes);
     } else if (pLine.type === 'directive' && pLine.directive === '.byte') {
-        machineCode.push(...pLine.values);
+      machineCode.push(...pLine.values);
     }
-    // ORG, EQU, .res, comment, label-only lines do not generate machine code in this pass.
+    // .org, EQU, .res, comment, label-only lines do not generate machine code in this pass.
   } // End of Pass 2 loop
 
   return { machineCode, error };
