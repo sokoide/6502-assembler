@@ -5,6 +5,7 @@ import { OutputDisplay } from './components/OutputDisplay';
 import { ErrorDisplay } from './components/ErrorDisplay';
 import { assemble } from './services/assembler';
 import { sampleCodes } from './services/sampleCodes';
+import { Copy } from 'lucide-react'
 
 const initialAssemblyCode = `\t.org $0200
 ; .org $0200 means the code starts at address $0200
@@ -129,14 +130,11 @@ const App: React.FC = () => {
             {machineCode && (
               <button
                 onClick={handleCopyMachineCode}
-                className="p-1.5 bg-gray-700 hover:bg-gray-600 rounded-md transition duration-150 ease-in-out focus:outline-none focus:ring-2 focus:ring-sky-500 focus:ring-opacity-50"
+                className="p-1 bg-gray-700 hover:bg-gray-600 rounded-md transition duration-150 ease-in-out focus:outline-none focus:ring-2 focus:ring-sky-500 focus:ring-opacity-50"
                 title="Copy machine code"
                 aria-label="Copy machine code to clipboard"
               >
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-gray-300" viewBox="0 0 20 20" fill="currentColor">
-                  <path d="M8 3a1 1 0 011-1h2a1 1 0 110 2H9a1 1 0 01-1-1z" />
-                  <path d="M6 3a2 2 0 00-2 2v11a2 2 0 002 2h8a2 2 0 002-2V5a2 2 0 00-2-2H6zm0 2h8v11H6V5zm6 1H8v1h4V6zm0 2H8v1h4V8zm0 2H8v1h4v-2z" />
-                </svg>
+                <Copy size={24} />
               </button>
             )}
           </div>
