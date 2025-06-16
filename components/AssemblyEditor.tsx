@@ -1,5 +1,5 @@
 
-import React from 'react';
+import React, { useCallback } from 'react';
 
 interface AssemblyEditorProps {
   value: string;
@@ -7,7 +7,7 @@ interface AssemblyEditorProps {
 }
 
 export const AssemblyEditor: React.FC<AssemblyEditorProps> = ({ value, onChange }) => {
-  const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+  const handleKeyDown = useCallback((e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     const el = e.currentTarget;
     const start = el.selectionStart;
     const end = el.selectionEnd;
@@ -47,7 +47,7 @@ export const AssemblyEditor: React.FC<AssemblyEditorProps> = ({ value, onChange 
         el.selectionStart = el.selectionEnd = pos;
       }, 0);
     }
-  };
+  }, [value, onChange]);
 
   return (
     <textarea

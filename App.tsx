@@ -1,10 +1,13 @@
 
-import React, { useState, useCallback, ChangeEvent } from 'react';
+import React, { useState, useCallback, ChangeEvent, useMemo } from 'react';
 import { AssemblyEditor } from './components/AssemblyEditor';
 import { OutputDisplay } from './components/OutputDisplay';
 import { ErrorDisplay } from './components/ErrorDisplay';
+import { ErrorBoundary } from './components/ErrorBoundary';
 import { assemble } from './services/assembler';
 import { sampleCodes } from './services/sampleCodes';
+import { validateAssemblyCode, validateSampleIndex, sanitizeErrorMessage } from './utils/validation';
+import { formatMachineCode, formatElapsedTime } from './utils/formatting';
 import { Copy } from 'lucide-react'
 
 const initialAssemblyCode = `\t.org $0200
@@ -36,35 +39,50 @@ const App: React.FC = () => {
     setError('');
     setMachineCode('');
     setElapsedTime(null);
-    setCopyStatus(''); // Clear copy status on new assembly
+    setCopyStatus('');
+    
+    // Validate input
+    const validation = validateAssemblyCode(assemblyCode);
+    if (!validation.isValid) {
+      setError(validation.errors.join('; '));
+      setElapsedTime(performance.now() - startTime);
+      return;
+    }
+    
     try {
       const result = assemble(assemblyCode);
       if (result.error) {
         setError(result.error);
       } else {
-        setMachineCode(result.machineCode.map(byte => byte.toString(16).toUpperCase().padStart(2, '0')).join(' '));
+        setMachineCode(formatMachineCode(result.machineCode));
       }
-    } catch (e: any) {
-      setError(`An unexpected error occurred: ${e.message}`);
+    } catch (e) {
+      const errorMessage = sanitizeErrorMessage(e);
+      setError(`Assembler error: ${errorMessage}`);
+      console.error('Assembly error:', e);
     }
+    
     const endTime = performance.now();
     setElapsedTime(endTime - startTime);
   }, [assemblyCode]);
 
-  const handleLoadSample = (event: ChangeEvent<HTMLSelectElement>) => {
+  const handleLoadSample = useCallback((event: ChangeEvent<HTMLSelectElement>) => {
     const sampleIndex = event.target.value;
     setSelectedSampleIndex(sampleIndex);
-    setCopyStatus(''); // Clear copy status on new sample load
+    setCopyStatus('');
+    
     if (sampleIndex) {
-      const selectedSample = sampleCodes[parseInt(sampleIndex, 10)];
-      if (selectedSample) {
+      if (validateSampleIndex(sampleIndex, sampleCodes.length)) {
+        const selectedSample = sampleCodes[parseInt(sampleIndex, 10)];
         setAssemblyCode(selectedSample.code);
         setError('');
         setMachineCode('');
         setElapsedTime(null);
+      } else {
+        setError('Invalid sample selection');
       }
     }
-  };
+  }, []);
 
   const handleCopyMachineCode = useCallback(async () => {
     if (!machineCode) {
@@ -82,8 +100,16 @@ const App: React.FC = () => {
     setTimeout(() => setCopyStatus(''), 2000);
   }, [machineCode]);
 
+  const sampleOptions = useMemo(() => 
+    sampleCodes.map((sample, index) => (
+      <option key={index} value={index.toString()}>
+        {sample.name}
+      </option>
+    )), []);
+
   return (
-    <div className="min-h-screen bg-gray-900 text-gray-100 flex flex-col items-center p-4 sm:p-6 md:p-8 selection:bg-blue-500 selection:text-white">
+    <ErrorBoundary>
+      <div className="min-h-screen bg-gray-900 text-gray-100 flex flex-col items-center p-4 sm:p-6 md:p-8 selection:bg-blue-500 selection:text-white">
       <header className="mb-6 text-center">
         <h1 className="text-4xl font-bold text-sky-400">6502 Assembler</h1>
         <p className="text-gray-400 mt-1">Assemble 6502 code in your browser.</p>
@@ -111,11 +137,7 @@ const App: React.FC = () => {
                 aria-label="Load sample code"
               >
                 <option value="" disabled>Load Sample...</option>
-                {sampleCodes.map((sample, index) => (
-                  <option key={index} value={index.toString()}>
-                    {sample.name}
-                  </option>
-                ))}
+                {sampleOptions}
               </select>
                <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-gray-400">
                 <svg className="fill-current h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20"><path d="M5.516 7.548c.436-.446 1.043-.48 1.576 0L10 10.405l2.908-2.857c.533-.48 1.14-.446 1.576 0 .436.445.408 1.197 0 1.615L10 13.635l-4.484-4.472c-.408-.418-.436-1.17 0-1.615z"/></svg>
@@ -146,7 +168,7 @@ const App: React.FC = () => {
           )}
           {error && <ErrorDisplay message={error} />}
           {elapsedTime !== null && !error && machineCode && (
-             <p className="text-xs text-gray-500 mt-2">Assembled in {elapsedTime.toFixed(2)} ms.</p>
+             <p className="text-xs text-gray-500 mt-2">Assembled in {formatElapsedTime(elapsedTime)}.</p>
           )}
         </div>
       </div>
@@ -191,7 +213,8 @@ const App: React.FC = () => {
       <footer className="mt-12 text-center text-sm text-gray-500">
         <p>&copy; {new Date().getFullYear()} AI Generated App. For demonstration purposes.</p>
       </footer>
-    </div>
+      </div>
+    </ErrorBoundary>
   );
 };
 

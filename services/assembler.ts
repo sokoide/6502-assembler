@@ -214,14 +214,24 @@ export function assemble(code: string): AssembleResult {
       const mnemonic = instructionMatch[1].toUpperCase();
       const operand = instructionMatch[2].trim();
 
+      // Find all matching variants for this mnemonic
+      const candidateVariants = instructionSet.filter(variant => 
+        variant.mnemonic === mnemonic && variant.regex.test(operand)
+      );
+
       let instructionFound: InstructionVariant | null = null;
-      for (const variant of instructionSet) {
-        if (variant.mnemonic === mnemonic) {
-          if (variant.regex.test(operand)) {
-            instructionFound = variant;
-            break;
-          }
-        }
+      
+      if (candidateVariants.length === 1) {
+        instructionFound = candidateVariants[0];
+      } else if (candidateVariants.length > 1) {
+        // Multiple matches - need to pick the right one
+        // This typically happens with labels that could be ZP or ABS
+        // For now, we'll defer this choice to pass 2 where labels are resolved
+        // Pick the first match as default
+        instructionFound = candidateVariants[0];
+      } else {
+        error = `Line ${lineNumber}: Unknown instruction or addressing mode for '${mnemonic}${operand ? ' ' + operand : ''}' from content '${contentAfterLabel}'. Original line: '${originalLine}'`;
+        return { machineCode: [], error };
       }
 
       if (instructionFound) {
@@ -232,12 +242,10 @@ export function assemble(code: string): AssembleResult {
           type: 'instruction',
           mnemonic,
           operand,
-          variant: instructionFound
+          variant: instructionFound,
+          candidateVariants // Store all candidates for pass 2 refinement
         });
         currentAddress += instructionFound.size;
-      } else {
-        error = `Line ${lineNumber}: Unknown instruction or addressing mode for '${mnemonic}${operand ? ' ' + operand : ''}' from content '${contentAfterLabel}'. Original line: '${originalLine}'`;
-        return { machineCode: [], error };
       }
     } else {
       error = `Line ${lineNumber}: Syntax error or unrecognized statement: '${contentAfterLabel}'. Original line: '${originalLine}'`;
@@ -250,8 +258,31 @@ export function assemble(code: string): AssembleResult {
 
   for (const pLine of parsedLines) {
     if (pLine.type === 'instruction' && pLine.variant) {
-      const instructionBytes: number[] = [pLine.variant.opcode];
-      const operandResult = pLine.variant.resolveOperand(pLine.operand, labels, pLine.address);
+      // Smart instruction selection for ZP vs ABS addressing
+      let finalVariant = pLine.variant;
+      
+      if (pLine.candidateVariants && pLine.candidateVariants.length > 1) {
+        // Try to find a better variant based on operand resolution
+        const operand = pLine.operand;
+        
+        // Check if operand is a label that resolves to zero page
+        if (/^[A-Za-z_][A-Za-z0-9_]*$/.test(operand)) {
+          const labelValue = labels.get(operand);
+          if (labelValue !== undefined) {
+            // Choose ZP variant if value fits in zero page
+            if (labelValue <= 0xFF) {
+              const zpVariant = pLine.candidateVariants.find(v => v.size === 2);
+              if (zpVariant) finalVariant = zpVariant;
+            } else {
+              const absVariant = pLine.candidateVariants.find(v => v.size === 3);
+              if (absVariant) finalVariant = absVariant;
+            }
+          }
+        }
+      }
+      
+      const instructionBytes: number[] = [finalVariant.opcode];
+      const operandResult = finalVariant.resolveOperand(pLine.operand, labels, pLine.address);
 
       if (operandResult.error) {
         error = `Line ${pLine.lineNumber}: Error resolving operand '${pLine.operand}' for ${pLine.mnemonic}: ${operandResult.error}. Original: '${pLine.originalLine}'`;
@@ -259,8 +290,8 @@ export function assemble(code: string): AssembleResult {
       }
       instructionBytes.push(...operandResult.bytes);
 
-      if (instructionBytes.length !== pLine.variant.size) {
-        error = `Line ${pLine.lineNumber}: Internal error - instruction size mismatch for ${pLine.mnemonic} ${pLine.operand}. Expected ${pLine.variant.size}, got ${instructionBytes.length}. Original: '${pLine.originalLine}'`;
+      if (instructionBytes.length !== finalVariant.size) {
+        error = `Line ${pLine.lineNumber}: Internal error - instruction size mismatch for ${pLine.mnemonic} ${pLine.operand}. Expected ${finalVariant.size}, got ${instructionBytes.length}. Original: '${pLine.originalLine}'`;
         return { machineCode: [], error };
       }
       machineCode.push(...instructionBytes);

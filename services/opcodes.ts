@@ -93,6 +93,8 @@ const resolveZeroPage: OperandResolver = (opStr, labels, _currentInstructionAddr
   let value: number | undefined;
   if (opStr.startsWith('$')) {
     value = parseInt(opStr.substring(1), 16);
+  } else if (/^[0-9]+$/.test(opStr)) {
+    value = parseInt(opStr, 10);
   } else if (/^[A-Za-z_][A-Za-z0-9_]*$/.test(opStr)) { // Label
     value = labels.get(opStr);
     if (value === undefined) return { bytes: [], error: `Label not found for Zero Page: ${opStr}` };
@@ -110,6 +112,8 @@ const resolveAbsolute: OperandResolver = (opStr, labels, _currentInstructionAddr
   let value: number | undefined;
   if (opStr.startsWith('$')) {
     value = parseInt(opStr.substring(1), 16);
+  } else if (/^[0-9]+$/.test(opStr)) {
+    value = parseInt(opStr, 10);
   } else if (/^[A-Za-z_][A-Za-z0-9_]*$/.test(opStr)) { // Label
     value = labels.get(opStr);
     if (value === undefined) return { bytes: [], error: `Label not found for Absolute address: ${opStr}` };
@@ -122,6 +126,21 @@ const resolveAbsolute: OperandResolver = (opStr, labels, _currentInstructionAddr
   }
   return { bytes: [value & 0xFF, (value >> 8) & 0xFF] };
 };
+
+// Helper function to determine if an operand resolves to zero page
+function isZeroPageOperand(opStr: string, labels: LabelMap): boolean {
+  if (opStr.startsWith('$')) {
+    const hexValue = parseInt(opStr.substring(1), 16);
+    return !isNaN(hexValue) && hexValue <= 0xFF;
+  } else if (/^[0-9]+$/.test(opStr)) {
+    const decValue = parseInt(opStr, 10);
+    return !isNaN(decValue) && decValue <= 0xFF;
+  } else if (/^[A-Za-z_][A-Za-z0-9_]*$/.test(opStr)) {
+    const value = labels.get(opStr);
+    return value !== undefined && value <= 0xFF;
+  }
+  return false;
+}
 
 const resolveZeroPageIndexed: (indexedChar: 'X' | 'Y') => OperandResolver = 
  (indexedChar) => (opStr, labels, _currentInstructionAddress) => {
@@ -256,74 +275,89 @@ const resolveIndirectAbsolute: OperandResolver = (opStr, labels, _currentInstruc
 
 // --- End of Operand Resolvers ---
 
-// Regex for matching operands
+// Regex for matching operands - order matters for disambiguation
 const R = {
   ACCUMULATOR: /^(A)?$/i, // Matches 'A' or empty (for implied accumulator ops like ASL)
   IMMEDIATE: /^#.+$/, // Generic immediate, handled by resolveImmediate
-  ZEROPAGE: /^(?:\$[0-9A-Fa-f]{1,2}|[A-Za-z_][A-Za-z0-9_]*)$/, // $NN or LABEL
+  
+  // Indexed addressing modes first (more specific)
   ZEROPAGE_X: /^(?:\$[0-9A-Fa-f]{1,2}|[A-Za-z_][A-Za-z0-9_]*),X$/i, // $NN,X or LABEL,X
   ZEROPAGE_Y: /^(?:\$[0-9A-Fa-f]{1,2}|[A-Za-z_][A-Za-z0-9_]*),Y$/i, // $NN,Y or LABEL,Y
-  ABSOLUTE: /^(?:\$[0-9A-Fa-f]{3,4}|[A-Za-z_][A-Za-z0-9_]*)$/, // $NNNN or LABEL
   ABSOLUTE_X: /^(?:\$[0-9A-Fa-f]{3,4}|[A-Za-z_][A-Za-z0-9_]*),X$/i, // $NNNN,X or LABEL,X
   ABSOLUTE_Y: /^(?:\$[0-9A-Fa-f]{3,4}|[A-Za-z_][A-Za-z0-9_]*),Y$/i, // $NNNN,Y or LABEL,Y
+  
+  // Indirect addressing modes
   INDIRECT_X: /^\((\$[0-9A-Fa-f]{1,2}|[A-Za-z_][A-Za-z0-9_]*),X\)$/i, // ($NN,X) or (LABEL,X)
   INDIRECT_Y: /^\((\$[0-9A-Fa-f]{1,2}|[A-Za-z_][A-Za-z0-9_]*)\),Y$/i, // ($NN),Y or (LABEL),Y
-  RELATIVE: /^[A-Za-z_][A-Za-z0-9_]*$/, // Label for branches
+  INDIRECT_ABS: /^\((\$[0-9A-Fa-f]{3,4}|[A-Za-z_][A-Za-z0-9_]*)\)$/i, // ($NNNN) or (LABEL)
+  
+  // Direct addressing modes - Zero page must come before absolute for hex disambiguation
+  ZEROPAGE: /^\$[0-9A-Fa-f]{1,2}$/, // $NN only (1-2 hex digits)
+  ABSOLUTE: /^\$[0-9A-Fa-f]{3,4}$/, // $NNNN only (3-4 hex digits)
+  
+  // Label addressing - need to resolve during assembly to determine ZP vs ABS
+  LABEL: /^[A-Za-z_][A-Za-z0-9_]*$/, // Label for any addressing mode
+  RELATIVE: /^[A-Za-z_][A-Za-z0-9_]*$/, // Label for branches (same as LABEL)
   IMPLIED: /^$/, // No operand
-  INDIRECT_ABS: /^\((\$[0-9A-Fa-f]{3,4}|[A-Za-z_][A-Za-z0-9_]*)\)$/i // ($NNNN) or (LABEL)
+};
+
+// Helper function to create instruction variants
+const createInstructionVariants = (mnemonic: string, opcodes: { 
+  imm?: number, zp?: number, zpx?: number, zpy?: number, 
+  abs?: number, abx?: number, aby?: number, 
+  indx?: number, indy?: number, impl?: number, acc?: number 
+}) => {
+  const variants: InstructionVariant[] = [];
+  
+  if (opcodes.imm !== undefined) variants.push({ mnemonic, regex: R.IMMEDIATE, opcode: opcodes.imm, size: 2, resolveOperand: resolveImmediate });
+  if (opcodes.indx !== undefined) variants.push({ mnemonic, regex: R.INDIRECT_X, opcode: opcodes.indx, size: 2, resolveOperand: resolveIndirectX });
+  if (opcodes.indy !== undefined) variants.push({ mnemonic, regex: R.INDIRECT_Y, opcode: opcodes.indy, size: 2, resolveOperand: resolveIndirectY });
+  if (opcodes.zpx !== undefined) variants.push({ mnemonic, regex: R.ZEROPAGE_X, opcode: opcodes.zpx, size: 2, resolveOperand: resolveZeroPageIndexed('X') });
+  if (opcodes.zpy !== undefined) variants.push({ mnemonic, regex: R.ZEROPAGE_Y, opcode: opcodes.zpy, size: 2, resolveOperand: resolveZeroPageIndexed('Y') });
+  if (opcodes.abx !== undefined) variants.push({ mnemonic, regex: R.ABSOLUTE_X, opcode: opcodes.abx, size: 3, resolveOperand: resolveAbsoluteIndexed('X') });
+  if (opcodes.aby !== undefined) variants.push({ mnemonic, regex: R.ABSOLUTE_Y, opcode: opcodes.aby, size: 3, resolveOperand: resolveAbsoluteIndexed('Y') });
+  if (opcodes.zp !== undefined) variants.push({ mnemonic, regex: R.ZEROPAGE, opcode: opcodes.zp, size: 2, resolveOperand: resolveZeroPage });
+  if (opcodes.abs !== undefined) variants.push({ mnemonic, regex: R.ABSOLUTE, opcode: opcodes.abs, size: 3, resolveOperand: resolveAbsolute });
+  if (opcodes.impl !== undefined) variants.push({ mnemonic, regex: R.IMPLIED, opcode: opcodes.impl, size: 1, resolveOperand: resolveImplied });
+  if (opcodes.acc !== undefined) variants.push({ mnemonic, regex: R.ACCUMULATOR, opcode: opcodes.acc, size: 1, resolveOperand: resolveAccumulator });
+  
+  // Add label variants for ZP and ABS if both are supported
+  if (opcodes.zp !== undefined && opcodes.abs !== undefined) {
+    variants.push({ mnemonic, regex: R.LABEL, opcode: opcodes.zp, size: 2, resolveOperand: resolveZeroPage });
+    variants.push({ mnemonic, regex: R.LABEL, opcode: opcodes.abs, size: 3, resolveOperand: resolveAbsolute });
+  } else if (opcodes.zp !== undefined) {
+    variants.push({ mnemonic, regex: R.LABEL, opcode: opcodes.zp, size: 2, resolveOperand: resolveZeroPage });
+  } else if (opcodes.abs !== undefined) {
+    variants.push({ mnemonic, regex: R.LABEL, opcode: opcodes.abs, size: 3, resolveOperand: resolveAbsolute });
+  }
+  
+  return variants;
 };
 
 export const instructionSet: InstructionVariant[] = [
-  // LDA
-  { mnemonic: 'LDA', regex: R.IMMEDIATE,   opcode: 0xA9, size: 2, resolveOperand: resolveImmediate },
-  { mnemonic: 'LDA', regex: R.ZEROPAGE,    opcode: 0xA5, size: 2, resolveOperand: resolveZeroPage },
-  { mnemonic: 'LDA', regex: R.ZEROPAGE_X,  opcode: 0xB5, size: 2, resolveOperand: resolveZeroPageIndexed('X') },
-  { mnemonic: 'LDA', regex: R.ABSOLUTE,    opcode: 0xAD, size: 3, resolveOperand: resolveAbsolute },
-  { mnemonic: 'LDA', regex: R.ABSOLUTE_X,  opcode: 0xBD, size: 3, resolveOperand: resolveAbsoluteIndexed('X') },
-  { mnemonic: 'LDA', regex: R.ABSOLUTE_Y,  opcode: 0xB9, size: 3, resolveOperand: resolveAbsoluteIndexed('Y') },
-  { mnemonic: 'LDA', regex: R.INDIRECT_X,  opcode: 0xA1, size: 2, resolveOperand: resolveIndirectX },
-  { mnemonic: 'LDA', regex: R.INDIRECT_Y,  opcode: 0xB1, size: 2, resolveOperand: resolveIndirectY },
-  // LDX
-  { mnemonic: 'LDX', regex: R.IMMEDIATE,   opcode: 0xA2, size: 2, resolveOperand: resolveImmediate },
-  { mnemonic: 'LDX', regex: R.ZEROPAGE,    opcode: 0xA6, size: 2, resolveOperand: resolveZeroPage },
-  { mnemonic: 'LDX', regex: R.ZEROPAGE_Y,  opcode: 0xB6, size: 2, resolveOperand: resolveZeroPageIndexed('Y') },
-  { mnemonic: 'LDX', regex: R.ABSOLUTE,    opcode: 0xAE, size: 3, resolveOperand: resolveAbsolute },
-  { mnemonic: 'LDX', regex: R.ABSOLUTE_Y,  opcode: 0xBE, size: 3, resolveOperand: resolveAbsoluteIndexed('Y') },
-  // LDY
-  { mnemonic: 'LDY', regex: R.IMMEDIATE,   opcode: 0xA0, size: 2, resolveOperand: resolveImmediate },
-  { mnemonic: 'LDY', regex: R.ZEROPAGE,    opcode: 0xA4, size: 2, resolveOperand: resolveZeroPage },
-  { mnemonic: 'LDY', regex: R.ZEROPAGE_X,  opcode: 0xB4, size: 2, resolveOperand: resolveZeroPageIndexed('X') },
-  { mnemonic: 'LDY', regex: R.ABSOLUTE,    opcode: 0xAC, size: 3, resolveOperand: resolveAbsolute },
-  { mnemonic: 'LDY', regex: R.ABSOLUTE_X,  opcode: 0xBC, size: 3, resolveOperand: resolveAbsoluteIndexed('X') },
-  // STA
-  { mnemonic: 'STA', regex: R.ZEROPAGE,    opcode: 0x85, size: 2, resolveOperand: resolveZeroPage },
-  { mnemonic: 'STA', regex: R.ZEROPAGE_X,  opcode: 0x95, size: 2, resolveOperand: resolveZeroPageIndexed('X') },
-  { mnemonic: 'STA', regex: R.ABSOLUTE,    opcode: 0x8D, size: 3, resolveOperand: resolveAbsolute },
-  { mnemonic: 'STA', regex: R.ABSOLUTE_X,  opcode: 0x9D, size: 3, resolveOperand: resolveAbsoluteIndexed('X') },
-  { mnemonic: 'STA', regex: R.ABSOLUTE_Y,  opcode: 0x99, size: 3, resolveOperand: resolveAbsoluteIndexed('Y') },
-  { mnemonic: 'STA', regex: R.INDIRECT_X,  opcode: 0x81, size: 2, resolveOperand: resolveIndirectX },
-  { mnemonic: 'STA', regex: R.INDIRECT_Y,  opcode: 0x91, size: 2, resolveOperand: resolveIndirectY },
-  // STX
-  { mnemonic: 'STX', regex: R.ZEROPAGE,    opcode: 0x86, size: 2, resolveOperand: resolveZeroPage },
-  { mnemonic: 'STX', regex: R.ZEROPAGE_Y,  opcode: 0x96, size: 2, resolveOperand: resolveZeroPageIndexed('Y') },
-  { mnemonic: 'STX', regex: R.ABSOLUTE,    opcode: 0x8E, size: 3, resolveOperand: resolveAbsolute },
-  // STY
-  { mnemonic: 'STY', regex: R.ZEROPAGE,    opcode: 0x84, size: 2, resolveOperand: resolveZeroPage },
-  { mnemonic: 'STY', regex: R.ZEROPAGE_X,  opcode: 0x94, size: 2, resolveOperand: resolveZeroPageIndexed('X') },
-  { mnemonic: 'STY', regex: R.ABSOLUTE,    opcode: 0x8C, size: 3, resolveOperand: resolveAbsolute },
-
+  // Load/Store instructions
+  ...createInstructionVariants('LDA', { imm: 0xA9, zp: 0xA5, zpx: 0xB5, abs: 0xAD, abx: 0xBD, aby: 0xB9, indx: 0xA1, indy: 0xB1 }),
+  ...createInstructionVariants('LDX', { imm: 0xA2, zp: 0xA6, zpy: 0xB6, abs: 0xAE, aby: 0xBE }),
+  ...createInstructionVariants('LDY', { imm: 0xA0, zp: 0xA4, zpx: 0xB4, abs: 0xAC, abx: 0xBC }),
+  ...createInstructionVariants('STA', { zp: 0x85, zpx: 0x95, abs: 0x8D, abx: 0x9D, aby: 0x99, indx: 0x81, indy: 0x91 }),
+  ...createInstructionVariants('STX', { zp: 0x86, zpy: 0x96, abs: 0x8E }),
+  ...createInstructionVariants('STY', { zp: 0x84, zpx: 0x94, abs: 0x8C }),
+  
   // Stack Operations
-  { mnemonic: 'PHA', regex: R.IMPLIED,     opcode: 0x48, size: 1, resolveOperand: resolveImplied },
-  { mnemonic: 'PLA', regex: R.IMPLIED,     opcode: 0x68, size: 1, resolveOperand: resolveImplied },
-  { mnemonic: 'PHP', regex: R.IMPLIED,     opcode: 0x08, size: 1, resolveOperand: resolveImplied },
-  { mnemonic: 'PLP', regex: R.IMPLIED,     opcode: 0x28, size: 1, resolveOperand: resolveImplied },
+  ...createInstructionVariants('PHA', { impl: 0x48 }),
+  ...createInstructionVariants('PLA', { impl: 0x68 }),
+  ...createInstructionVariants('PHP', { impl: 0x08 }),
+  ...createInstructionVariants('PLP', { impl: 0x28 }),
 
-
-  // JMP
-  { mnemonic: 'JMP', regex: R.ABSOLUTE,     opcode: 0x4C, size: 3, resolveOperand: resolveAbsolute },
+  // Control Flow
+  ...createInstructionVariants('JMP', { abs: 0x4C }),
   { mnemonic: 'JMP', regex: R.INDIRECT_ABS, opcode: 0x6C, size: 3, resolveOperand: resolveIndirectAbsolute },
+  ...createInstructionVariants('JSR', { abs: 0x20 }),
+  ...createInstructionVariants('RTS', { impl: 0x60 }),
+  ...createInstructionVariants('BRK', { impl: 0x00 }),
+  ...createInstructionVariants('NOP', { impl: 0xEA }),
 
-  // Branch instructions (all use relative addressing)
+  // Branch instructions
   { mnemonic: 'BPL', regex: R.RELATIVE, opcode: 0x10, size: 2, resolveOperand: resolveRelativeLabel },
   { mnemonic: 'BMI', regex: R.RELATIVE, opcode: 0x30, size: 2, resolveOperand: resolveRelativeLabel },
   { mnemonic: 'BVC', regex: R.RELATIVE, opcode: 0x50, size: 2, resolveOperand: resolveRelativeLabel },
@@ -333,135 +367,51 @@ export const instructionSet: InstructionVariant[] = [
   { mnemonic: 'BNE', regex: R.RELATIVE, opcode: 0xD0, size: 2, resolveOperand: resolveRelativeLabel },
   { mnemonic: 'BEQ', regex: R.RELATIVE, opcode: 0xF0, size: 2, resolveOperand: resolveRelativeLabel },
 
-  // Other common instructions
-  { mnemonic: 'RTS', regex: R.IMPLIED, opcode: 0x60, size: 1, resolveOperand: resolveImplied },
-  { mnemonic: 'JSR', regex: R.ABSOLUTE, opcode: 0x20, size: 3, resolveOperand: resolveAbsolute },
-  { mnemonic: 'NOP', regex: R.IMPLIED, opcode: 0xEA, size: 1, resolveOperand: resolveImplied },
-  { mnemonic: 'BRK', regex: R.IMPLIED, opcode: 0x00, size: 1, resolveOperand: resolveImplied },
-
   // Arithmetic
-  { mnemonic: 'ADC', regex: R.IMMEDIATE,   opcode: 0x69, size: 2, resolveOperand: resolveImmediate },
-  { mnemonic: 'ADC', regex: R.ZEROPAGE,    opcode: 0x65, size: 2, resolveOperand: resolveZeroPage },
-  { mnemonic: 'ADC', regex: R.ZEROPAGE_X,  opcode: 0x75, size: 2, resolveOperand: resolveZeroPageIndexed('X') },
-  { mnemonic: 'ADC', regex: R.ABSOLUTE,    opcode: 0x6D, size: 3, resolveOperand: resolveAbsolute },
-  { mnemonic: 'ADC', regex: R.ABSOLUTE_X,  opcode: 0x7D, size: 3, resolveOperand: resolveAbsoluteIndexed('X') },
-  { mnemonic: 'ADC', regex: R.ABSOLUTE_Y,  opcode: 0x79, size: 3, resolveOperand: resolveAbsoluteIndexed('Y') },
-  { mnemonic: 'ADC', regex: R.INDIRECT_X,  opcode: 0x61, size: 2, resolveOperand: resolveIndirectX },
-  { mnemonic: 'ADC', regex: R.INDIRECT_Y,  opcode: 0x71, size: 2, resolveOperand: resolveIndirectY },
-  
-  { mnemonic: 'SBC', regex: R.IMMEDIATE,   opcode: 0xE9, size: 2, resolveOperand: resolveImmediate },
-  { mnemonic: 'SBC', regex: R.ZEROPAGE,    opcode: 0xE5, size: 2, resolveOperand: resolveZeroPage },
-  { mnemonic: 'SBC', regex: R.ZEROPAGE_X,  opcode: 0xF5, size: 2, resolveOperand: resolveZeroPageIndexed('X') },
-  { mnemonic: 'SBC', regex: R.ABSOLUTE,    opcode: 0xED, size: 3, resolveOperand: resolveAbsolute },
-  { mnemonic: 'SBC', regex: R.ABSOLUTE_X,  opcode: 0xFD, size: 3, resolveOperand: resolveAbsoluteIndexed('X') },
-  { mnemonic: 'SBC', regex: R.ABSOLUTE_Y,  opcode: 0xF9, size: 3, resolveOperand: resolveAbsoluteIndexed('Y') },
-  { mnemonic: 'SBC', regex: R.INDIRECT_X,  opcode: 0xE1, size: 2, resolveOperand: resolveIndirectX },
-  { mnemonic: 'SBC', regex: R.INDIRECT_Y,  opcode: 0xF1, size: 2, resolveOperand: resolveIndirectY },
+  ...createInstructionVariants('ADC', { imm: 0x69, zp: 0x65, zpx: 0x75, abs: 0x6D, abx: 0x7D, aby: 0x79, indx: 0x61, indy: 0x71 }),
+  ...createInstructionVariants('SBC', { imm: 0xE9, zp: 0xE5, zpx: 0xF5, abs: 0xED, abx: 0xFD, aby: 0xF9, indx: 0xE1, indy: 0xF1 }),
 
   // Comparisons
-  { mnemonic: 'CMP', regex: R.IMMEDIATE,   opcode: 0xC9, size: 2, resolveOperand: resolveImmediate },
-  { mnemonic: 'CMP', regex: R.ZEROPAGE,    opcode: 0xC5, size: 2, resolveOperand: resolveZeroPage },
-  { mnemonic: 'CMP', regex: R.ZEROPAGE_X,  opcode: 0xD5, size: 2, resolveOperand: resolveZeroPageIndexed('X') },
-  { mnemonic: 'CMP', regex: R.ABSOLUTE,    opcode: 0xCD, size: 3, resolveOperand: resolveAbsolute },
-  { mnemonic: 'CMP', regex: R.ABSOLUTE_X,  opcode: 0xDD, size: 3, resolveOperand: resolveAbsoluteIndexed('X') },
-  { mnemonic: 'CMP', regex: R.ABSOLUTE_Y,  opcode: 0xD9, size: 3, resolveOperand: resolveAbsoluteIndexed('Y') },
-  { mnemonic: 'CMP', regex: R.INDIRECT_X,  opcode: 0xC1, size: 2, resolveOperand: resolveIndirectX },
-  { mnemonic: 'CMP', regex: R.INDIRECT_Y,  opcode: 0xD1, size: 2, resolveOperand: resolveIndirectY },
+  ...createInstructionVariants('CMP', { imm: 0xC9, zp: 0xC5, zpx: 0xD5, abs: 0xCD, abx: 0xDD, aby: 0xD9, indx: 0xC1, indy: 0xD1 }),
+  ...createInstructionVariants('CPX', { imm: 0xE0, zp: 0xE4, abs: 0xEC }),
+  ...createInstructionVariants('CPY', { imm: 0xC0, zp: 0xC4, abs: 0xCC }),
 
-  { mnemonic: 'CPX', regex: R.IMMEDIATE,   opcode: 0xE0, size: 2, resolveOperand: resolveImmediate },
-  { mnemonic: 'CPX', regex: R.ZEROPAGE,    opcode: 0xE4, size: 2, resolveOperand: resolveZeroPage },
-  { mnemonic: 'CPX', regex: R.ABSOLUTE,    opcode: 0xEC, size: 3, resolveOperand: resolveAbsolute },
-
-  { mnemonic: 'CPY', regex: R.IMMEDIATE,   opcode: 0xC0, size: 2, resolveOperand: resolveImmediate },
-  { mnemonic: 'CPY', regex: R.ZEROPAGE,    opcode: 0xC4, size: 2, resolveOperand: resolveZeroPage },
-  { mnemonic: 'CPY', regex: R.ABSOLUTE,    opcode: 0xCC, size: 3, resolveOperand: resolveAbsolute },
-
-  // Increments/Decrements
-  { mnemonic: 'INC', regex: R.ZEROPAGE,    opcode: 0xE6, size: 2, resolveOperand: resolveZeroPage },
-  { mnemonic: 'INC', regex: R.ZEROPAGE_X,  opcode: 0xF6, size: 2, resolveOperand: resolveZeroPageIndexed('X') },
-  { mnemonic: 'INC', regex: R.ABSOLUTE,    opcode: 0xEE, size: 3, resolveOperand: resolveAbsolute },
-  { mnemonic: 'INC', regex: R.ABSOLUTE_X,  opcode: 0xFE, size: 3, resolveOperand: resolveAbsoluteIndexed('X') },
-  { mnemonic: 'INX', regex: R.IMPLIED,     opcode: 0xE8, size: 1, resolveOperand: resolveImplied },
-  { mnemonic: 'INY', regex: R.IMPLIED,     opcode: 0xC8, size: 1, resolveOperand: resolveImplied },
-
-  { mnemonic: 'DEC', regex: R.ZEROPAGE,    opcode: 0xC6, size: 2, resolveOperand: resolveZeroPage },
-  { mnemonic: 'DEC', regex: R.ZEROPAGE_X,  opcode: 0xD6, size: 2, resolveOperand: resolveZeroPageIndexed('X') },
-  { mnemonic: 'DEC', regex: R.ABSOLUTE,    opcode: 0xCE, size: 3, resolveOperand: resolveAbsolute },
-  { mnemonic: 'DEC', regex: R.ABSOLUTE_X,  opcode: 0xDE, size: 3, resolveOperand: resolveAbsoluteIndexed('X') },
-  { mnemonic: 'DEX', regex: R.IMPLIED,     opcode: 0xCA, size: 1, resolveOperand: resolveImplied },
-  { mnemonic: 'DEY', regex: R.IMPLIED,     opcode: 0x88, size: 1, resolveOperand: resolveImplied },
+  // Increment/Decrement
+  ...createInstructionVariants('INC', { zp: 0xE6, zpx: 0xF6, abs: 0xEE, abx: 0xFE }),
+  ...createInstructionVariants('DEC', { zp: 0xC6, zpx: 0xD6, abs: 0xCE, abx: 0xDE }),
+  ...createInstructionVariants('INX', { impl: 0xE8 }),
+  ...createInstructionVariants('INY', { impl: 0xC8 }),
+  ...createInstructionVariants('DEX', { impl: 0xCA }),
+  ...createInstructionVariants('DEY', { impl: 0x88 }),
 
   // Shifts & Rotates
-  { mnemonic: 'ASL', regex: R.ACCUMULATOR, opcode: 0x0A, size: 1, resolveOperand: resolveAccumulator },
-  { mnemonic: 'ASL', regex: R.ZEROPAGE,    opcode: 0x06, size: 2, resolveOperand: resolveZeroPage },
-  { mnemonic: 'ASL', regex: R.ZEROPAGE_X,  opcode: 0x16, size: 2, resolveOperand: resolveZeroPageIndexed('X') },
-  { mnemonic: 'ASL', regex: R.ABSOLUTE,    opcode: 0x0E, size: 3, resolveOperand: resolveAbsolute },
-  { mnemonic: 'ASL', regex: R.ABSOLUTE_X,  opcode: 0x1E, size: 3, resolveOperand: resolveAbsoluteIndexed('X') },
-
-  { mnemonic: 'LSR', regex: R.ACCUMULATOR, opcode: 0x4A, size: 1, resolveOperand: resolveAccumulator },
-  { mnemonic: 'LSR', regex: R.ZEROPAGE,    opcode: 0x46, size: 2, resolveOperand: resolveZeroPage },
-  { mnemonic: 'LSR', regex: R.ZEROPAGE_X,  opcode: 0x56, size: 2, resolveOperand: resolveZeroPageIndexed('X') },
-  { mnemonic: 'LSR', regex: R.ABSOLUTE,    opcode: 0x4E, size: 3, resolveOperand: resolveAbsolute },
-  { mnemonic: 'LSR', regex: R.ABSOLUTE_X,  opcode: 0x5E, size: 3, resolveOperand: resolveAbsoluteIndexed('X') },
-
-  { mnemonic: 'ROL', regex: R.ACCUMULATOR, opcode: 0x2A, size: 1, resolveOperand: resolveAccumulator },
-  { mnemonic: 'ROL', regex: R.ZEROPAGE,    opcode: 0x26, size: 2, resolveOperand: resolveZeroPage },
-  { mnemonic: 'ROL', regex: R.ZEROPAGE_X,  opcode: 0x36, size: 2, resolveOperand: resolveZeroPageIndexed('X') },
-  { mnemonic: 'ROL', regex: R.ABSOLUTE,    opcode: 0x2E, size: 3, resolveOperand: resolveAbsolute },
-  { mnemonic: 'ROL', regex: R.ABSOLUTE_X,  opcode: 0x3E, size: 3, resolveOperand: resolveAbsoluteIndexed('X') },
-
-  { mnemonic: 'ROR', regex: R.ACCUMULATOR, opcode: 0x6A, size: 1, resolveOperand: resolveAccumulator },
-  { mnemonic: 'ROR', regex: R.ZEROPAGE,    opcode: 0x66, size: 2, resolveOperand: resolveZeroPage },
-  { mnemonic: 'ROR', regex: R.ZEROPAGE_X,  opcode: 0x76, size: 2, resolveOperand: resolveZeroPageIndexed('X') },
-  { mnemonic: 'ROR', regex: R.ABSOLUTE,    opcode: 0x6E, size: 3, resolveOperand: resolveAbsolute },
-  { mnemonic: 'ROR', regex: R.ABSOLUTE_X,  opcode: 0x7E, size: 3, resolveOperand: resolveAbsoluteIndexed('X') },
+  ...createInstructionVariants('ASL', { acc: 0x0A, zp: 0x06, zpx: 0x16, abs: 0x0E, abx: 0x1E }),
+  ...createInstructionVariants('LSR', { acc: 0x4A, zp: 0x46, zpx: 0x56, abs: 0x4E, abx: 0x5E }),
+  ...createInstructionVariants('ROL', { acc: 0x2A, zp: 0x26, zpx: 0x36, abs: 0x2E, abx: 0x3E }),
+  ...createInstructionVariants('ROR', { acc: 0x6A, zp: 0x66, zpx: 0x76, abs: 0x6E, abx: 0x7E }),
 
   // Logical
-  { mnemonic: 'AND', regex: R.IMMEDIATE,   opcode: 0x29, size: 2, resolveOperand: resolveImmediate },
-  { mnemonic: 'AND', regex: R.ZEROPAGE,    opcode: 0x25, size: 2, resolveOperand: resolveZeroPage },
-  { mnemonic: 'AND', regex: R.ZEROPAGE_X,  opcode: 0x35, size: 2, resolveOperand: resolveZeroPageIndexed('X') },
-  { mnemonic: 'AND', regex: R.ABSOLUTE,    opcode: 0x2D, size: 3, resolveOperand: resolveAbsolute },
-  { mnemonic: 'AND', regex: R.ABSOLUTE_X,  opcode: 0x3D, size: 3, resolveOperand: resolveAbsoluteIndexed('X') },
-  { mnemonic: 'AND', regex: R.ABSOLUTE_Y,  opcode: 0x39, size: 3, resolveOperand: resolveAbsoluteIndexed('Y') },
-  { mnemonic: 'AND', regex: R.INDIRECT_X,  opcode: 0x21, size: 2, resolveOperand: resolveIndirectX },
-  { mnemonic: 'AND', regex: R.INDIRECT_Y,  opcode: 0x31, size: 2, resolveOperand: resolveIndirectY },
+  ...createInstructionVariants('AND', { imm: 0x29, zp: 0x25, zpx: 0x35, abs: 0x2D, abx: 0x3D, aby: 0x39, indx: 0x21, indy: 0x31 }),
+  ...createInstructionVariants('EOR', { imm: 0x49, zp: 0x45, zpx: 0x55, abs: 0x4D, abx: 0x5D, aby: 0x59, indx: 0x41, indy: 0x51 }),
+  ...createInstructionVariants('ORA', { imm: 0x09, zp: 0x05, zpx: 0x15, abs: 0x0D, abx: 0x1D, aby: 0x19, indx: 0x01, indy: 0x11 }),
 
-  { mnemonic: 'EOR', regex: R.IMMEDIATE,   opcode: 0x49, size: 2, resolveOperand: resolveImmediate },
-  { mnemonic: 'EOR', regex: R.ZEROPAGE,    opcode: 0x45, size: 2, resolveOperand: resolveZeroPage },
-  { mnemonic: 'EOR', regex: R.ZEROPAGE_X,  opcode: 0x55, size: 2, resolveOperand: resolveZeroPageIndexed('X') },
-  { mnemonic: 'EOR', regex: R.ABSOLUTE,    opcode: 0x4D, size: 3, resolveOperand: resolveAbsolute },
-  { mnemonic: 'EOR', regex: R.ABSOLUTE_X,  opcode: 0x5D, size: 3, resolveOperand: resolveAbsoluteIndexed('X') },
-  { mnemonic: 'EOR', regex: R.ABSOLUTE_Y,  opcode: 0x59, size: 3, resolveOperand: resolveAbsoluteIndexed('Y') },
-  { mnemonic: 'EOR', regex: R.INDIRECT_X,  opcode: 0x41, size: 2, resolveOperand: resolveIndirectX },
-  { mnemonic: 'EOR', regex: R.INDIRECT_Y,  opcode: 0x51, size: 2, resolveOperand: resolveIndirectY },
-
-  { mnemonic: 'ORA', regex: R.IMMEDIATE,   opcode: 0x09, size: 2, resolveOperand: resolveImmediate },
-  { mnemonic: 'ORA', regex: R.ZEROPAGE,    opcode: 0x05, size: 2, resolveOperand: resolveZeroPage },
-  { mnemonic: 'ORA', regex: R.ZEROPAGE_X,  opcode: 0x15, size: 2, resolveOperand: resolveZeroPageIndexed('X') },
-  { mnemonic: 'ORA', regex: R.ABSOLUTE,    opcode: 0x0D, size: 3, resolveOperand: resolveAbsolute },
-  { mnemonic: 'ORA', regex: R.ABSOLUTE_X,  opcode: 0x1D, size: 3, resolveOperand: resolveAbsoluteIndexed('X') },
-  { mnemonic: 'ORA', regex: R.ABSOLUTE_Y,  opcode: 0x19, size: 3, resolveOperand: resolveAbsoluteIndexed('Y') },
-  { mnemonic: 'ORA', regex: R.INDIRECT_X,  opcode: 0x01, size: 2, resolveOperand: resolveIndirectX },
-  { mnemonic: 'ORA', regex: R.INDIRECT_Y,  opcode: 0x11, size: 2, resolveOperand: resolveIndirectY },
-  
   // Bit Test
-  { mnemonic: 'BIT', regex: R.ZEROPAGE,    opcode: 0x24, size: 2, resolveOperand: resolveZeroPage },
-  { mnemonic: 'BIT', regex: R.ABSOLUTE,    opcode: 0x2C, size: 3, resolveOperand: resolveAbsolute },
+  ...createInstructionVariants('BIT', { zp: 0x24, abs: 0x2C }),
 
   // Status Flag Instructions
-  { mnemonic: 'CLC', regex: R.IMPLIED, opcode: 0x18, size: 1, resolveOperand: resolveImplied },
-  { mnemonic: 'SEC', regex: R.IMPLIED, opcode: 0x38, size: 1, resolveOperand: resolveImplied },
-  { mnemonic: 'CLI', regex: R.IMPLIED, opcode: 0x58, size: 1, resolveOperand: resolveImplied },
-  { mnemonic: 'SEI', regex: R.IMPLIED, opcode: 0x78, size: 1, resolveOperand: resolveImplied },
-  { mnemonic: 'CLD', regex: R.IMPLIED, opcode: 0xD8, size: 1, resolveOperand: resolveImplied },
-  { mnemonic: 'SED', regex: R.IMPLIED, opcode: 0xF8, size: 1, resolveOperand: resolveImplied },
-  { mnemonic: 'CLV', regex: R.IMPLIED, opcode: 0xB8, size: 1, resolveOperand: resolveImplied },
+  ...createInstructionVariants('CLC', { impl: 0x18 }),
+  ...createInstructionVariants('SEC', { impl: 0x38 }),
+  ...createInstructionVariants('CLI', { impl: 0x58 }),
+  ...createInstructionVariants('SEI', { impl: 0x78 }),
+  ...createInstructionVariants('CLD', { impl: 0xD8 }),
+  ...createInstructionVariants('SED', { impl: 0xF8 }),
+  ...createInstructionVariants('CLV', { impl: 0xB8 }),
 
-  // Transfer
-  { mnemonic: 'TAX', regex: R.IMPLIED, opcode: 0xAA, size: 1, resolveOperand: resolveImplied },
-  { mnemonic: 'TXA', regex: R.IMPLIED, opcode: 0x8A, size: 1, resolveOperand: resolveImplied },
-  { mnemonic: 'TAY', regex: R.IMPLIED, opcode: 0xA8, size: 1, resolveOperand: resolveImplied },
-  { mnemonic: 'TYA', regex: R.IMPLIED, opcode: 0x98, size: 1, resolveOperand: resolveImplied },
-  { mnemonic: 'TSX', regex: R.IMPLIED, opcode: 0xBA, size: 1, resolveOperand: resolveImplied },
-  { mnemonic: 'TXS', regex: R.IMPLIED, opcode: 0x9A, size: 1, resolveOperand: resolveImplied },
+  // Transfer Instructions
+  ...createInstructionVariants('TAX', { impl: 0xAA }),
+  ...createInstructionVariants('TXA', { impl: 0x8A }),
+  ...createInstructionVariants('TAY', { impl: 0xA8 }),
+  ...createInstructionVariants('TYA', { impl: 0x98 }),
+  ...createInstructionVariants('TSX', { impl: 0xBA }),
+  ...createInstructionVariants('TXS', { impl: 0x9A })
 ];

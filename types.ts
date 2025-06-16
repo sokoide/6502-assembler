@@ -14,6 +14,7 @@ export interface ParsedInstructionLine extends ParsedLineBase {
   mnemonic: string;
   operand: string;
   variant: InstructionVariant;
+  candidateVariants?: InstructionVariant[]; // For smart ZP/ABS selection
 }
 
 export interface ParsedLabelDefinitionLine extends ParsedLineBase { // For labels on their own line or before an instruction/data
