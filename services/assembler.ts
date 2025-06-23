@@ -17,7 +17,13 @@ const ASCIIZ_REGEX = /^(\.ASCIIZ)\s+(.+)$/i;
 // INSTRUCTION_REGEX matches a 3-letter mnemonic followed by anything.
 const INSTRUCTION_REGEX = /^([A-Za-z]{3})\s*(.*)$/;
 
-// Helper to parse mixed string and byte values (for .ascii and .asciiz)
+/**
+ * Parses mixed string and byte values for .ascii and .asciiz directives
+ * @param valuesStr - The string containing mixed values to parse
+ * @param labels - Map of labels to their addresses
+ * @param context - Context for error messages
+ * @returns Object containing parsed bytes array or error message
+ */
 function parseMixedValues(valuesStr: string, labels: LabelMap, context: string): { bytes: number[], error?: string } {
   const resultBytes: number[] = [];
   let i = 0;
@@ -89,11 +95,21 @@ function parseMixedValues(valuesStr: string, labels: LabelMap, context: string):
   return { bytes: resultBytes };
 }
 
-// Helper to parse numeric value or label, returns number or error string
+/**
+ * Parses a single numeric value, hex value, character literal, or label reference
+ * @param valueStr - The string to parse
+ * @param labels - Map of labels to their addresses
+ * @param context - Context for error messages
+ * @returns Parsed number or error message string
+ */
 function parseValue(valueStr: string, labels: LabelMap, context: string): number | string {
   const s = valueStr.trim();
   if (s.startsWith('$')) {
-    const n = parseInt(s.substring(1), 16);
+    const hexPart = s.substring(1);
+    if (!/^[0-9A-Fa-f]+$/.test(hexPart)) {
+      return `Invalid hexadecimal value '${s}' for ${context}`;
+    }
+    const n = parseInt(hexPart, 16);
     return isNaN(n) ? `Invalid hexadecimal value '${s}' for ${context}` : n;
   } else if (/^[0-9]+$/.test(s)) {
     const n = parseInt(s, 10);
@@ -102,13 +118,23 @@ function parseValue(valueStr: string, labels: LabelMap, context: string): number
     const val = labels.get(s);
     if (val === undefined) return `Label '${s}' not found for ${context}`;
     return val;
-  } else if ((s.startsWith("'") && s.endsWith("'") && s.length === 3) || (s.startsWith('"') && s.endsWith('"') && s.length === 3)) {
+  } else if (s.startsWith("'") && s.endsWith("'") && s.length === 3) {
+    return s.charCodeAt(1); // ASCII value of character
+  } else if (s.startsWith('"') && s.endsWith('"') && s.length === 3) {
     return s.charCodeAt(1); // ASCII value of character
   }
   return `Invalid value format '${s}' for ${context}`;
 }
 
 
+/**
+ * Main assembler function - converts 6502 assembly code to machine code
+ * Uses a two-pass approach:
+ * Pass 1: Parse syntax, build symbol table, calculate addresses
+ * Pass 2: Resolve operands and generate machine code
+ * @param code - The assembly source code to assemble
+ * @returns Object containing machine code array and any error message
+ */
 export function assemble(code: string): AssembleResult {
   const lines = code.split('\n');
   const labels = new Map<string, number>();
@@ -236,8 +262,8 @@ export function assemble(code: string): AssembleResult {
         error = `Line ${lineNumber}: ${count}. Original line: '${originalLine}'`;
         return { machineCode: [], error };
       }
-      if (count < 0) {
-        error = `Line ${lineNumber}: .res count cannot be negative: ${countStr}. Original line: '${originalLine}'`;
+      if (count < 0 || !Number.isInteger(count)) {
+        error = `Line ${lineNumber}: .res count must be a non-negative integer: ${countStr}. Original line: '${originalLine}'`;
         return { machineCode: [], error };
       }
       parsedLines.push({
@@ -425,6 +451,35 @@ export function assemble(code: string): AssembleResult {
           if (labelValue !== undefined) {
             // Choose ZP variant if value fits in zero page
             if (labelValue <= 0xFF) {
+              const zpVariant = pLine.candidateVariants.find(v => v.size === 2);
+              if (zpVariant) finalVariant = zpVariant;
+            } else {
+              const absVariant = pLine.candidateVariants.find(v => v.size === 3);
+              if (absVariant) finalVariant = absVariant;
+            }
+          }
+        }
+        // Check if operand has indexed addressing with hex value > $FF
+        else if (/,X$/i.test(operand) || /,Y$/i.test(operand)) {
+          const addressPart = operand.split(',')[0].trim();
+          if (addressPart.startsWith('$')) {
+            const hexValue = parseInt(addressPart.substring(1), 16);
+            if (!isNaN(hexValue)) {
+              if (hexValue <= 0xFF) {
+                const zpVariant = pLine.candidateVariants.find(v => v.size === 2);
+                if (zpVariant) finalVariant = zpVariant;
+              } else {
+                const absVariant = pLine.candidateVariants.find(v => v.size === 3);
+                if (absVariant) finalVariant = absVariant;
+              }
+            }
+          }
+        }
+        // Check for direct hex addressing
+        else if (operand.startsWith('$')) {
+          const hexValue = parseInt(operand.substring(1), 16);
+          if (!isNaN(hexValue)) {
+            if (hexValue <= 0xFF) {
               const zpVariant = pLine.candidateVariants.find(v => v.size === 2);
               if (zpVariant) finalVariant = zpVariant;
             } else {

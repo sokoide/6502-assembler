@@ -155,6 +155,8 @@ const resolveZeroPageIndexed: (indexedChar: 'X' | 'Y') => OperandResolver =
     let value: number | undefined;
     if (addressPart.startsWith('$')) {
         value = parseInt(addressPart.substring(1), 16);
+    } else if (/^[0-9]+$/.test(addressPart)) {
+        value = parseInt(addressPart, 10);
     } else if (/^[A-Za-z_][A-Za-z0-9_]*$/.test(addressPart)) { // Label
         value = labels.get(addressPart);
         if (value === undefined) return { bytes: [], error: `Label not found for ZeroPage,${indexedChar}: ${addressPart}` };
@@ -179,6 +181,8 @@ const resolveAbsoluteIndexed: (indexedChar: 'X' | 'Y') => OperandResolver =
     let value: number | undefined;
     if (addressPart.startsWith('$')) {
         value = parseInt(addressPart.substring(1), 16);
+    } else if (/^[0-9]+$/.test(addressPart)) {
+        value = parseInt(addressPart, 10);
     } else if (/^[A-Za-z_][A-Za-z0-9_]*$/.test(addressPart)) { // Label
         value = labels.get(addressPart);
         if (value === undefined) return { bytes: [], error: `Label not found for Absolute,${indexedChar}: ${addressPart}` };
@@ -194,7 +198,7 @@ const resolveAbsoluteIndexed: (indexedChar: 'X' | 'Y') => OperandResolver =
 
 const resolveIndirectX: OperandResolver = (opStr, labels, _currentInstructionAddress) => {
     // Matches ($NN,X) or (LABEL,X)
-    const match = opStr.match(/^\((\$[0-9A-Fa-f]{1,2}|[A-Za-z_][A-Za-z0-9_]*),X\)$/i);
+    const match = opStr.match(/^\((\$[0-9A-Fa-f]+|[A-Za-z_][A-Za-z0-9_]*),X\)$/i);
     if (!match) {
       return { bytes: [], error: `Invalid (Indirect,X) format: ${opStr}` };
     }
@@ -216,7 +220,7 @@ const resolveIndirectX: OperandResolver = (opStr, labels, _currentInstructionAdd
 
 const resolveIndirectY: OperandResolver = (opStr, labels, _currentInstructionAddress) => {
     // Matches ($NN),Y or (LABEL),Y
-    const match = opStr.match(/^\((\$[0-9A-Fa-f]{1,2}|[A-Za-z_][A-Za-z0-9_]*)\),Y$/i);
+    const match = opStr.match(/^\((\$[0-9A-Fa-f]+|[A-Za-z_][A-Za-z0-9_]*)\),Y$/i);
     if (!match) {
       return { bytes: [], error: `Invalid (Indirect),Y format: ${opStr}` };
     }
@@ -254,7 +258,7 @@ const resolveRelativeLabel: OperandResolver = (opStr, labels, currentInstruction
 
 const resolveIndirectAbsolute: OperandResolver = (opStr, labels, _currentInstructionAddress) => {
     // Matches ($NNNN) or (LABEL)
-    const match = opStr.match(/^\((\$[0-9A-Fa-f]{3,4}|[A-Za-z_][A-Za-z0-9_]*)\)$/i);
+    const match = opStr.match(/^\((\$[0-9A-Fa-f]+|[A-Za-z_][A-Za-z0-9_]*)\)$/i);
     if (!match) {
       return { bytes: [], error: `Invalid Indirect Absolute format: ${opStr}` };
     }
@@ -283,15 +287,15 @@ const R = {
   IMMEDIATE: /^#.+$/, // Generic immediate, handled by resolveImmediate
   
   // Indexed addressing modes first (more specific)
-  ZEROPAGE_X: /^(?:\$[0-9A-Fa-f]{1,2}|[A-Za-z_][A-Za-z0-9_]*),X$/i, // $NN,X or LABEL,X
-  ZEROPAGE_Y: /^(?:\$[0-9A-Fa-f]{1,2}|[A-Za-z_][A-Za-z0-9_]*),Y$/i, // $NN,Y or LABEL,Y
+  ZEROPAGE_X: /^(?:\$[0-9A-Fa-f]{1,2}|[0-9]{1,3}),X$/i, // $NN,X or decimal for ZP
+  ZEROPAGE_Y: /^(?:\$[0-9A-Fa-f]{1,2}|[0-9]{1,3}),Y$/i, // $NN,Y or decimal for ZP
   ABSOLUTE_X: /^(?:\$[0-9A-Fa-f]{3,4}|[A-Za-z_][A-Za-z0-9_]*),X$/i, // $NNNN,X or LABEL,X
   ABSOLUTE_Y: /^(?:\$[0-9A-Fa-f]{3,4}|[A-Za-z_][A-Za-z0-9_]*),Y$/i, // $NNNN,Y or LABEL,Y
   
   // Indirect addressing modes
-  INDIRECT_X: /^\((\$[0-9A-Fa-f]{1,2}|[A-Za-z_][A-Za-z0-9_]*),X\)$/i, // ($NN,X) or (LABEL,X)
-  INDIRECT_Y: /^\((\$[0-9A-Fa-f]{1,2}|[A-Za-z_][A-Za-z0-9_]*)\),Y$/i, // ($NN),Y or (LABEL),Y
-  INDIRECT_ABS: /^\((\$[0-9A-Fa-f]{3,4}|[A-Za-z_][A-Za-z0-9_]*)\)$/i, // ($NNNN) or (LABEL)
+  INDIRECT_X: /^\((\$[0-9A-Fa-f]+|[A-Za-z_][A-Za-z0-9_]*),X\)$/i, // ($NN,X) or (LABEL,X)
+  INDIRECT_Y: /^\((\$[0-9A-Fa-f]+|[A-Za-z_][A-Za-z0-9_]*)\),Y$/i, // ($NN),Y or (LABEL),Y
+  INDIRECT_ABS: /^\((\$[0-9A-Fa-f]+|[A-Za-z_][A-Za-z0-9_]*)\)$/i, // ($NNNN) or (LABEL)
   
   // Direct addressing modes - Zero page must come before absolute for hex disambiguation
   ZEROPAGE: /^\$[0-9A-Fa-f]{1,2}$/, // $NN only (1-2 hex digits)
@@ -303,7 +307,12 @@ const R = {
   IMPLIED: /^$/, // No operand
 };
 
-// Helper function to create instruction variants
+/**
+ * Creates instruction variants for a given mnemonic with all supported addressing modes
+ * @param mnemonic - The instruction mnemonic (e.g., 'LDA', 'STA')
+ * @param opcodes - Object mapping addressing mode abbreviations to opcodes
+ * @returns Array of InstructionVariant objects
+ */
 const createInstructionVariants = (mnemonic: string, opcodes: { 
   imm?: number, zp?: number, zpx?: number, zpy?: number, 
   abs?: number, abx?: number, aby?: number, 
@@ -331,6 +340,16 @@ const createInstructionVariants = (mnemonic: string, opcodes: {
     variants.push({ mnemonic, regex: R.LABEL, opcode: opcodes.zp, size: 2, resolveOperand: resolveZeroPage });
   } else if (opcodes.abs !== undefined) {
     variants.push({ mnemonic, regex: R.LABEL, opcode: opcodes.abs, size: 3, resolveOperand: resolveAbsolute });
+  }
+  
+  // Add label variants for indexed addressing
+  if (opcodes.zpx !== undefined && opcodes.abx !== undefined) {
+    variants.push({ mnemonic, regex: /^[A-Za-z_][A-Za-z0-9_]*,X$/i, opcode: opcodes.zpx, size: 2, resolveOperand: resolveZeroPageIndexed('X') });
+    variants.push({ mnemonic, regex: /^[A-Za-z_][A-Za-z0-9_]*,X$/i, opcode: opcodes.abx, size: 3, resolveOperand: resolveAbsoluteIndexed('X') });
+  }
+  if (opcodes.zpy !== undefined && opcodes.aby !== undefined) {
+    variants.push({ mnemonic, regex: /^[A-Za-z_][A-Za-z0-9_]*,Y$/i, opcode: opcodes.zpy, size: 2, resolveOperand: resolveZeroPageIndexed('Y') });
+    variants.push({ mnemonic, regex: /^[A-Za-z_][A-Za-z0-9_]*,Y$/i, opcode: opcodes.aby, size: 3, resolveOperand: resolveAbsoluteIndexed('Y') });
   }
   
   return variants;
