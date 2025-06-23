@@ -12,6 +12,22 @@ dist
 dist-ssr
 *.local
 
+# Test coverage artifacts
+coverage/
+*.lcov
+.nyc_output/
+
+# TypeScript build artifacts
+*.tsbuildinfo
+
+# Jest cache
+.jest/
+
+# Temporary files
+*.tmp
+*.temp
+.cache/
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json

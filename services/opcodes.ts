@@ -127,7 +127,8 @@ const resolveAbsolute: OperandResolver = (opStr, labels, _currentInstructionAddr
   return { bytes: [value & 0xFF, (value >> 8) & 0xFF] };
 };
 
-// Helper function to determine if an operand resolves to zero page
+// Helper function to determine if an operand resolves to zero page (not currently used)
+/*
 function isZeroPageOperand(opStr: string, labels: LabelMap): boolean {
   if (opStr.startsWith('$')) {
     const hexValue = parseInt(opStr.substring(1), 16);
@@ -141,6 +142,7 @@ function isZeroPageOperand(opStr: string, labels: LabelMap): boolean {
   }
   return false;
 }
+*/
 
 const resolveZeroPageIndexed: (indexedChar: 'X' | 'Y') => OperandResolver = 
  (indexedChar) => (opStr, labels, _currentInstructionAddress) => {

@@ -1,12 +1,12 @@
 
 import { instructionSet, InstructionVariant } from './opcodes';
-import type { ParsedLine, AssembleResult, LabelMap, ParsedResDirectiveLine, ParsedByteDirectiveLine, ParsedEquDirectiveLine, ParsedWordDirectiveLine, ParsedDwordDirectiveLine, ParsedAsciiDirectiveLine, ParsedAsciizDirectiveLine } from '../types';
+import type { ParsedLine, AssembleResult, LabelMap, ParsedResDirectiveLine, ParsedByteDirectiveLine, /* ParsedEquDirectiveLine, */ ParsedWordDirectiveLine, ParsedDwordDirectiveLine, ParsedAsciiDirectiveLine, ParsedAsciizDirectiveLine } from '../types';
 
 const ORG_REGEX_FULL = /^(?:\*)\s*=\s*\$([0-9A-Fa-f]{1,4})|\.org\s+\$([0-9A-Fa-f]{1,4})$/i;
 const ORG_REGEX_PART = /^(\.org)\s+\$([0-9A-Fa-f]{1,4})$/i; // For use after label
 const STAR_ORG_REGEX_PART = /^(\*)\s*=\s*\$([0-9A-Fa-f]{1,4})$/i; // For use after label
 
-const EQU_REGEX = /(.+)\s+^(EQU)\s+(.+)$/i;
+// const EQU_REGEX = /(.+)\s+^(EQU)\s+(.+)$/i; // Not implemented yet
 const RES_REGEX = /^(\.RES)\s+(.+)$/i;
 const BYTE_REGEX = /^(\.BYTE)\s+(.+)$/i;
 const WORD_REGEX = /^(\.WORD)\s+(.+)$/i;
