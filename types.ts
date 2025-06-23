@@ -49,12 +49,40 @@ export interface ParsedByteDirectiveLine extends ParsedLineBase {
   values: number[]; // Array of byte values
 }
 
+export interface ParsedWordDirectiveLine extends ParsedLineBase {
+  type: 'directive';
+  directive: '.word';
+  label?: string; // Optional label preceding .word
+  valueStrings: string[]; // Array of value strings to resolve in Pass 2
+}
+
+export interface ParsedDwordDirectiveLine extends ParsedLineBase {
+  type: 'directive';
+  directive: '.dword';
+  label?: string; // Optional label preceding .dword
+  valueStrings: string[]; // Array of value strings to resolve in Pass 2
+}
+
+export interface ParsedAsciiDirectiveLine extends ParsedLineBase {
+  type: 'directive';
+  directive: '.ascii';
+  label?: string; // Optional label preceding .ascii
+  values: number[]; // ASCII bytes (mixed strings and byte values)
+}
+
+export interface ParsedAsciizDirectiveLine extends ParsedLineBase {
+  type: 'directive';
+  directive: '.asciiz';
+  label?: string; // Optional label preceding .asciiz
+  values: number[]; // ASCII bytes with null terminator (mixed strings and byte values)
+}
+
 export interface ParsedCommentOrEmptyLine extends ParsedLineBase {
   type: 'comment' | 'empty';
 }
 
 
-export type ParsedDirectiveLine = ParsedOrgDirectiveLine | ParsedEquDirectiveLine | ParsedResDirectiveLine | ParsedByteDirectiveLine;
+export type ParsedDirectiveLine = ParsedOrgDirectiveLine | ParsedEquDirectiveLine | ParsedResDirectiveLine | ParsedByteDirectiveLine | ParsedWordDirectiveLine | ParsedDwordDirectiveLine | ParsedAsciiDirectiveLine | ParsedAsciizDirectiveLine;
 export type ParsedLine = ParsedInstructionLine | ParsedLabelDefinitionLine | ParsedDirectiveLine | ParsedCommentOrEmptyLine;
 
 

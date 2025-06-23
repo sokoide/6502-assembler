@@ -151,5 +151,34 @@ start:
 \t
 \ttarget_label: NOP ; Address is $0215 after BRK
 `
+  },
+  {
+    name: "12. Pseudo Instructions",
+    code: `\t.org $0200\n
+start:
+\tLDA offset_hi
+\tSTA $01
+\tLDA message,Y
+\tBRK
+
+; -----------------------------------
+; variables
+; -----------------------------------
+offset_lo:  .res 1
+offset_hi:  .res 1
+
+; -----------------------------------
+; data examples
+; -----------------------------------
+word_data:  .word $1234, $5678, message
+dword_data: .dword $12345678
+
+; -----------------------------------
+; strings (mixed strings and bytes)
+; -----------------------------------
+message:    .ascii "Hello, World!", 1, 0
+greeting:   .ascii "Hi", 32, "there!", 13, 10
+c_string:   .asciiz "Null-terminated"
+mixed_str:  .asciiz "Value: ", $30, $31, $32`
   }
 ];

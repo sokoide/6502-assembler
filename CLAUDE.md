@@ -11,7 +11,7 @@ This is a browser-based 6502 assembler built with React, TypeScript, and Vite. I
 The project follows a clean separation of concerns:
 
 - **Frontend (React)**: `App.tsx` is the main component with assembly editor, output display, and error handling
-- **Components**: `AssemblyEditor.tsx`, `OutputDisplay.tsx`, `ErrorDisplay.tsx` handle UI rendering  
+- **Components**: `AssemblyEditor.tsx`, `OutputDisplay.tsx`, `ErrorDisplay.tsx` handle UI rendering
 - **Core Logic**: `services/assembler.ts` contains the two-pass assembler implementation
 - **Instruction Set**: `services/opcodes.ts` defines the 6502 instruction set with opcodes and addressing modes
 - **Type Definitions**: `types.ts` defines TypeScript interfaces for parsed lines and assembly results
@@ -26,7 +26,7 @@ The assembler in `services/assembler.ts` uses a traditional two-pass approach:
 
 ### Supported Features
 - Labels (case-sensitive)
-- Directives: `.org`, `.res`, `.byte`
+- Directives: `.org`, `.res`, `.byte`, `.word`, `.dword`, `.ascii`, `.asciiz`
 - All standard 6502 addressing modes
 - Hex (`$FF`), decimal (`123`), and character (`'A'`) literals
 - Low/high byte operators (`#<LABEL`, `#>LABEL`)

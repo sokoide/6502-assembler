@@ -1,6 +1,6 @@
 
 import { instructionSet, InstructionVariant } from './opcodes';
-import type { ParsedLine, AssembleResult, LabelMap, ParsedResDirectiveLine, ParsedByteDirectiveLine, ParsedEquDirectiveLine } from '../types';
+import type { ParsedLine, AssembleResult, LabelMap, ParsedResDirectiveLine, ParsedByteDirectiveLine, ParsedEquDirectiveLine, ParsedWordDirectiveLine, ParsedDwordDirectiveLine, ParsedAsciiDirectiveLine, ParsedAsciizDirectiveLine } from '../types';
 
 const ORG_REGEX_FULL = /^(?:\*)\s*=\s*\$([0-9A-Fa-f]{1,4})|\.org\s+\$([0-9A-Fa-f]{1,4})$/i;
 const ORG_REGEX_PART = /^(\.org)\s+\$([0-9A-Fa-f]{1,4})$/i; // For use after label
@@ -9,9 +9,85 @@ const STAR_ORG_REGEX_PART = /^(\*)\s*=\s*\$([0-9A-Fa-f]{1,4})$/i; // For use aft
 const EQU_REGEX = /(.+)\s+^(EQU)\s+(.+)$/i;
 const RES_REGEX = /^(\.RES)\s+(.+)$/i;
 const BYTE_REGEX = /^(\.BYTE)\s+(.+)$/i;
+const WORD_REGEX = /^(\.WORD)\s+(.+)$/i;
+const DWORD_REGEX = /^(\.DWORD)\s+(.+)$/i;
+const ASCII_REGEX = /^(\.ASCII)\s+(.+)$/i;
+const ASCIIZ_REGEX = /^(\.ASCIIZ)\s+(.+)$/i;
 
 // INSTRUCTION_REGEX matches a 3-letter mnemonic followed by anything.
 const INSTRUCTION_REGEX = /^([A-Za-z]{3})\s*(.*)$/;
+
+// Helper to parse mixed string and byte values (for .ascii and .asciiz)
+function parseMixedValues(valuesStr: string, labels: LabelMap, context: string): { bytes: number[], error?: string } {
+  const resultBytes: number[] = [];
+  let i = 0;
+  const input = valuesStr.trim();
+  
+  while (i < input.length) {
+    // Skip whitespace
+    while (i < input.length && /\s/.test(input[i])) {
+      i++;
+    }
+    
+    if (i >= input.length) break;
+    
+    // Check if we're starting a quoted string
+    if (input[i] === '"' || input[i] === "'") {
+      const quote = input[i];
+      i++; // Skip opening quote
+      const start = i;
+      
+      // Find closing quote
+      while (i < input.length && input[i] !== quote) {
+        i++;
+      }
+      
+      if (i >= input.length) {
+        return { bytes: [], error: `Unterminated string in ${context}` };
+      }
+      
+      const str = input.slice(start, i);
+      i++; // Skip closing quote
+      
+      // Add ASCII bytes for each character
+      for (let j = 0; j < str.length; j++) {
+        resultBytes.push(str.charCodeAt(j));
+      }
+    } else {
+      // Parse a numeric value or label
+      const start = i;
+      
+      // Find the end of this value (next comma or end of string)
+      while (i < input.length && input[i] !== ',') {
+        i++;
+      }
+      
+      const valueStr = input.slice(start, i).trim();
+      if (valueStr === '') {
+        return { bytes: [], error: `Empty value in ${context}` };
+      }
+      
+      const value = parseValue(valueStr, labels, context);
+      if (typeof value === 'string') {
+        return { bytes: [], error: value };
+      }
+      if (value < 0 || value > 0xFF) {
+        return { bytes: [], error: `${context} value '${valueStr}' out of range (0-255)` };
+      }
+      resultBytes.push(value);
+    }
+    
+    // Skip comma if present
+    while (i < input.length && /\s/.test(input[i])) {
+      i++;
+    }
+    if (i < input.length && input[i] === ',') {
+      i++;
+    }
+  }
+  
+  return { bytes: resultBytes };
+}
 
 // Helper to parse numeric value or label, returns number or error string
 function parseValue(valueStr: string, labels: LabelMap, context: string): number | string {
@@ -207,6 +283,84 @@ export function assemble(code: string): AssembleResult {
       continue;
     }
 
+    // Check for .WORD directive
+    const wordMatch = contentAfterLabel.match(WORD_REGEX);
+    if (wordMatch) {
+      const valuesStr = wordMatch[2].split(',').map(s => s.trim());
+      parsedLines.push({
+        lineNumber,
+        originalLine,
+        address: currentAddress, // Label (if any) points here
+        type: 'directive',
+        directive: '.word',
+        label: currentLineLabel || undefined,
+        valueStrings: valuesStr
+      } as ParsedWordDirectiveLine);
+      currentAddress += valuesStr.length * 2; // 2 bytes per word
+      continue;
+    }
+
+    // Check for .DWORD directive
+    const dwordMatch = contentAfterLabel.match(DWORD_REGEX);
+    if (dwordMatch) {
+      const valuesStr = dwordMatch[2].split(',').map(s => s.trim());
+      parsedLines.push({
+        lineNumber,
+        originalLine,
+        address: currentAddress, // Label (if any) points here
+        type: 'directive',
+        directive: '.dword',
+        label: currentLineLabel || undefined,
+        valueStrings: valuesStr
+      } as ParsedDwordDirectiveLine);
+      currentAddress += valuesStr.length * 4; // 4 bytes per dword
+      continue;
+    }
+
+    // Check for .ASCII directive
+    const asciiMatch = contentAfterLabel.match(ASCII_REGEX);
+    if (asciiMatch) {
+      const valuesStr = asciiMatch[2]; // Everything after .ASCII
+      const parseResult = parseMixedValues(valuesStr, labels, ".ascii");
+      if (parseResult.error) {
+        error = `Line ${lineNumber}: ${parseResult.error}. Original line: '${originalLine}'`;
+        return { machineCode: [], error };
+      }
+      parsedLines.push({
+        lineNumber,
+        originalLine,
+        address: currentAddress, // Label (if any) points here
+        type: 'directive',
+        directive: '.ascii',
+        label: currentLineLabel || undefined,
+        values: parseResult.bytes
+      } as ParsedAsciiDirectiveLine);
+      currentAddress += parseResult.bytes.length;
+      continue;
+    }
+
+    // Check for .ASCIIZ directive
+    const asciizMatch = contentAfterLabel.match(ASCIIZ_REGEX);
+    if (asciizMatch) {
+      const valuesStr = asciizMatch[2]; // Everything after .ASCIIZ
+      const parseResult = parseMixedValues(valuesStr, labels, ".asciiz");
+      if (parseResult.error) {
+        error = `Line ${lineNumber}: ${parseResult.error}. Original line: '${originalLine}'`;
+        return { machineCode: [], error };
+      }
+      parsedLines.push({
+        lineNumber,
+        originalLine,
+        address: currentAddress, // Label (if any) points here
+        type: 'directive',
+        directive: '.asciiz',
+        label: currentLineLabel || undefined,
+        values: parseResult.bytes
+      } as ParsedAsciizDirectiveLine);
+      currentAddress += parseResult.bytes.length + 1; // +1 for null terminator
+      continue;
+    }
+
 
     // Check for INSTRUCTION
     const instructionMatch = contentAfterLabel.match(INSTRUCTION_REGEX);
@@ -297,6 +451,45 @@ export function assemble(code: string): AssembleResult {
       machineCode.push(...instructionBytes);
     } else if (pLine.type === 'directive' && pLine.directive === '.byte') {
       machineCode.push(...pLine.values);
+    } else if (pLine.type === 'directive' && pLine.directive === '.word') {
+      // Resolve and generate little-endian bytes for each word value
+      for (const valueStr of pLine.valueStrings) {
+        const wordValue = parseValue(valueStr, labels, ".word value");
+        if (typeof wordValue === 'string') {
+          error = `Line ${pLine.lineNumber}: ${wordValue}. Original: '${pLine.originalLine}'`;
+          return { machineCode: [], error };
+        }
+        if (wordValue < 0 || wordValue > 0xFFFF) {
+          error = `Line ${pLine.lineNumber}: .word value '${valueStr}' out of range (0-65535). Original: '${pLine.originalLine}'`;
+          return { machineCode: [], error };
+        }
+        machineCode.push(wordValue & 0xFF);        // Low byte
+        machineCode.push((wordValue >> 8) & 0xFF); // High byte
+      }
+    } else if (pLine.type === 'directive' && pLine.directive === '.dword') {
+      // Resolve and generate little-endian bytes for each dword value
+      for (const valueStr of pLine.valueStrings) {
+        const dwordValue = parseValue(valueStr, labels, ".dword value");
+        if (typeof dwordValue === 'string') {
+          error = `Line ${pLine.lineNumber}: ${dwordValue}. Original: '${pLine.originalLine}'`;
+          return { machineCode: [], error };
+        }
+        if (dwordValue < 0 || dwordValue > 0xFFFFFFFF) {
+          error = `Line ${pLine.lineNumber}: .dword value '${valueStr}' out of range (0-4294967295). Original: '${pLine.originalLine}'`;
+          return { machineCode: [], error };
+        }
+        machineCode.push(dwordValue & 0xFF);         // Byte 0 (lowest)
+        machineCode.push((dwordValue >> 8) & 0xFF);  // Byte 1
+        machineCode.push((dwordValue >> 16) & 0xFF); // Byte 2
+        machineCode.push((dwordValue >> 24) & 0xFF); // Byte 3 (highest)
+      }
+    } else if (pLine.type === 'directive' && pLine.directive === '.ascii') {
+      // Generate bytes for mixed strings and values
+      machineCode.push(...pLine.values);
+    } else if (pLine.type === 'directive' && pLine.directive === '.asciiz') {
+      // Generate bytes for mixed strings and values plus null terminator
+      machineCode.push(...pLine.values);
+      machineCode.push(0); // Null terminator
     }
     // .org, EQU, .res, comment, label-only lines do not generate machine code in this pass.
   } // End of Pass 2 loop
