@@ -3,10 +3,10 @@
  */
 
 import { describe, test, expect } from '@jest/globals';
-import { assemble } from '../../services/assembler';
-import { sampleCodes } from '../../services/sampleCodes';
-import { validateAssemblyCode, sanitizeErrorMessage } from '../../utils/validation';
-import { formatMachineCode, formatElapsedTime, formatByteCount, formatAddress } from '../../utils/formatting';
+import { assemble } from '@/services/assembler';
+import { sampleCodes } from '@/services/sampleCodes';
+import { validateAssemblyCode, sanitizeErrorMessage } from '@/utils/validation';
+import { formatMachineCode, formatElapsedTime, formatByteCount, formatAddress } from '@/utils/formatting';
 
 describe('Assembler Integration Tests', () => {
   describe('End-to-end assembly workflow', () => {

@@ -7,7 +7,7 @@ export default {
   
   // Module name mapping for path aliases
   moduleNameMapper: {
-    '^@/(.*)$': '<rootDir>/$1',
+    '^@/(.*)$': '<rootDir>/src/$1',
   },
   
   // Transform configuration
@@ -28,11 +28,11 @@ export default {
   
   // Coverage configuration
   collectCoverageFrom: [
-    'services/**/*.{ts,tsx}',
-    'utils/**/*.{ts,tsx}',
-    'components/**/*.{ts,tsx}',
-    'types.ts',
-    'App.tsx',
+    'src/services/**/*.{ts,tsx}',
+    'src/utils/**/*.{ts,tsx}',
+    'src/components/**/*.{ts,tsx}',
+    'src/types/*.ts',
+    'src/App.tsx',
     '!**/*.d.ts',
     '!**/node_modules/**',
     '!**/dist/**',

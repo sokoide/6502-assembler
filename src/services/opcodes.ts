@@ -1,5 +1,5 @@
 
-import type { LabelMap } from '../types';
+import type { LabelMap } from '../types/types';
 
 export interface OperandResolverOutput {
   bytes: number[];

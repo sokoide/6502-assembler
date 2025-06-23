@@ -7,7 +7,7 @@ import {
   validateAssemblyCode,
   validateSampleIndex,
   sanitizeErrorMessage,
-} from '../../../utils/validation';
+} from '@/utils/validation';
 
 describe('Validation Utils', () => {
   describe('validateAssemblyCode', () => {

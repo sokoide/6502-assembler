@@ -4,8 +4,8 @@
  */
 
 import { describe, test, expect } from '@jest/globals';
-import { instructionSet } from '../../../services/opcodes';
-import { assemble } from '../../../services/assembler';
+import { instructionSet } from '@/services/opcodes';
+import { assemble } from '@/services/assembler';
 
 describe('Comprehensive 6502 Instruction Coverage', () => {
   // All 6502 instructions with their opcodes and addressing modes

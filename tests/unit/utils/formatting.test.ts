@@ -8,7 +8,7 @@ import {
   formatElapsedTime,
   formatByteCount,
   formatAddress,
-} from '../../../utils/formatting';
+} from '@/utils/formatting';
 
 describe('Formatting Utils', () => {
   describe('formatMachineCode', () => {

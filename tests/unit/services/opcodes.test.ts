@@ -3,8 +3,8 @@
  */
 
 import { describe, test, expect, beforeEach } from '@jest/globals';
-import { instructionSet } from '../../../services/opcodes';
-import type { LabelMap } from '../../../types';
+import { instructionSet } from '@/services/opcodes';
+import type { LabelMap } from '@/types/types';
 
 describe('Opcodes Service', () => {
   describe('instructionSet', () => {

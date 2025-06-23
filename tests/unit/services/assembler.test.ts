@@ -3,8 +3,8 @@
  */
 
 import { describe, test, expect } from '@jest/globals';
-import { assemble } from '../../../services/assembler';
-// import type { AssembleResult } from '../../../types'; // Type not needed
+import { assemble } from '@/services/assembler';
+// import type { AssembleResult } from '@/types/types'; // Type not needed
 import {
   validAssemblyCode,
   invalidAssemblyCode,
@@ -12,7 +12,7 @@ import {
   addressingModeTests,
   branchTests,
   performanceTestCode,
-} from '../../fixtures/testAssemblyCode';
+} from '@/fixtures/testAssemblyCode';
 
 describe('Assembler Service', () => {
   describe('assemble() function', () => {

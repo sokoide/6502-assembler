@@ -4,15 +4,15 @@
 
 import { describe, test, expect, beforeEach, jest } from '@jest/globals';
 import { render, screen } from '@testing-library/react';
-import App from '../../App';
+import App from "@/App";
 
 // Mock the assembler service
-jest.mock('../../services/assembler', () => ({
+jest.mock('@/services/assembler', () => ({
   assemble: jest.fn(),
 }));
 
 // Mock the sample codes
-jest.mock('../../services/sampleCodes', () => ({
+jest.mock('@/services/sampleCodes', () => ({
   sampleCodes: [
     { name: '1. Test Sample', code: '.org $0200\nLDA #$01\nBRK' },
     { name: '2. Another Sample', code: '.org $0300\nNOP' },
@@ -20,12 +20,12 @@ jest.mock('../../services/sampleCodes', () => ({
 }));
 
 // Mock utility functions
-jest.mock('../../utils/validation', () => ({
+jest.mock('@/utils/validation', () => ({
   validateAssemblyCode: jest.fn(() => ({ isValid: true, errors: [] })),
   sanitizeErrorMessage: jest.fn((error: any) => (error?.message as string) || 'Unknown error'),
 }));
 
-import { assemble } from '../../services/assembler';
+import { assemble } from '@/services/assembler';
 
 const mockAssemble = assemble as jest.MockedFunction<typeof assemble>;
 

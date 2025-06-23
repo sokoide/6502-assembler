@@ -1,6 +1,6 @@
 
 import { instructionSet, InstructionVariant } from './opcodes';
-import type { ParsedLine, AssembleResult, LabelMap, ParsedResDirectiveLine, ParsedByteDirectiveLine, /* ParsedEquDirectiveLine, */ ParsedWordDirectiveLine, ParsedDwordDirectiveLine, ParsedAsciiDirectiveLine, ParsedAsciizDirectiveLine } from '../types';
+import type { ParsedLine, AssembleResult, LabelMap, ParsedResDirectiveLine, ParsedByteDirectiveLine, /* ParsedEquDirectiveLine, */ ParsedWordDirectiveLine, ParsedDwordDirectiveLine, ParsedAsciiDirectiveLine, ParsedAsciizDirectiveLine } from '../types/types';
 
 const ORG_REGEX_FULL = /^(?:\*)\s*=\s*\$([0-9A-Fa-f]{1,4})|\.org\s+\$([0-9A-Fa-f]{1,4})$/i;
 const ORG_REGEX_PART = /^(\.org)\s+\$([0-9A-Fa-f]{1,4})$/i; // For use after label

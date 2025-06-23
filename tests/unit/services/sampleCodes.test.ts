@@ -3,8 +3,8 @@
  */
 
 import { describe, test, expect } from '@jest/globals';
-import { sampleCodes } from '../../../services/sampleCodes';
-import { assemble } from '../../../services/assembler';
+import { sampleCodes } from '@/services/sampleCodes';
+import { assemble } from '@/services/assembler';
 
 describe('Sample Codes', () => {
   describe('sampleCodes array', () => {
