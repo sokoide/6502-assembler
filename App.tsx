@@ -175,39 +175,74 @@ const App: React.FC = () => {
 
       <div className="w-full max-w-5xl mt-8 p-4 bg-gray-800 rounded-lg shadow">
         <h3 className="text-lg font-semibold text-sky-300 mb-2">Instructions & Notes</h3>
-        <ul className="list-disc list-inside text-sm text-gray-300 space-y-1">
-          <li>Supported directives:
-            <code>ORG $XXXX</code>, <code>* = $XXXX</code> (set origin).
-            <code>LABEL: .res COUNT</code> (reserve COUNT bytes).
-            <code>LABEL: .byte VAL1, VAL2,...</code> (define byte data).
-          </li>
-          <li>Labels: Define with <code>LABELNAME:</code> (e.g., <code>MY_LOOP:</code>). Case-sensitive. Can be on same line as instruction/directive.</li>
-          <li>Comments: Start with <code>;</code> (e.g., <code>; This is a comment</code>).</li>
-          <li>Numbers & Values:
-            <ul className="list-disc list-inside ml-4 text-xs text-gray-400">
-              <li>Hex: <code>#$FF</code> (imm), <code>$FF</code> (ZP), <code>$FFFF</code> (abs). For <code>.res</code>, <code>.byte</code>: <code>$HH</code>.</li>
-              <li>Decimal: <code>#123</code> (imm). For <code>.res</code>, <code>.byte</code>: <code>123</code>.</li>
-              <li>Character (for <code>.byte</code>): <code>'A'</code>, <code>"B"</code> (ASCII value).</li>
-              <li>Labels (for <code>.res</code>, <code>.byte</code> values, and instruction operands).</li>
-              <li>Low/High byte (for immediate mode): <code>#&lt;$WORD</code>, <code>#&gt;$WORD</code>, <code>#&lt;LABEL</code>, <code>#&gt;LABEL</code>.</li>
+        <div className="text-sm text-gray-300 space-y-3">
+          <div>
+            <h4 className="font-semibold text-sky-400 mb-1">Supported Directives</h4>
+            <ul className="list-disc list-inside ml-2 space-y-1">
+              <li><code>.org $XXXX</code> - Set origin address (e.g., <code>.org $8000</code>)</li>
+              <li><code>.res COUNT</code> - Reserve COUNT bytes</li>
+              <li><code>.byte VAL1, VAL2,...</code> - Define byte data</li>
+              <li><code>.word VAL1, VAL2,...</code> - Define word data (16-bit, little-endian)</li>
+              <li><code>.dword VAL1, VAL2,...</code> - Define double word data (32-bit, little-endian)</li>
+              <li><code>.ascii "TEXT"</code> - Define ASCII string</li>
+              <li><code>.asciiz "TEXT"</code> - Define null-terminated ASCII string</li>
             </ul>
-          </li>
-          <li>Addressing Modes (examples):
-            <ul className="list-disc list-inside ml-4 text-xs text-gray-400">
-              <li>Immediate: <code>LDA #$A9</code>, <code>LDX #10</code>, <code>LDA #&lt;MY_LABEL</code></li>
-              <li>Zero Page: <code>STA $00</code>, <code>LDA ZP_LABEL</code></li>
-              <li>Zero Page,X/Y: <code>LDA $10,X</code>, <code>LDX $10,Y</code></li>
-              <li>Absolute: <code>JMP $C000</code>, <code>LDA MY_LABEL</code></li>
-              <li>Absolute,X/Y: <code>STA $C000,X</code>, <code>LDA MY_LABEL,Y</code></li>
-              <li>Indirect: <code>JMP ($C000)</code></li>
-              <li>(Indirect,X): <code>LDA ($10,X)</code></li>
-              <li>(Indirect),Y: <code>LDA ($20),Y</code></li>
-              <li>Relative (for branches): <code>BNE MY_LOOP</code></li>
-              <li>Implied/Accumulator: <code>NOP</code>, <code>INX</code>, <code>ASL A</code></li>
+          </div>
+          
+          <div>
+            <h4 className="font-semibold text-sky-400 mb-1">Labels & Comments</h4>
+            <ul className="list-disc list-inside ml-2 space-y-1">
+              <li>Labels: Define with <code>LABELNAME:</code> (case-sensitive)</li>
+              <li>Labels can be on the same line as instructions</li>
+              <li>Comments: Start with <code>;</code> anywhere on a line</li>
             </ul>
-          </li>
-          <li>The example output from the prompt (<code>A9 C0 ... 4C 0C 02</code>) is achieved with the initially pre-filled code using <code>.org $0200</code>, which means LOOP is at <code>$020C</code>, hence <code>JMP $020C</code> is <code>4C 0C 02</code>.</li>
-        </ul>
+          </div>
+          
+          <div>
+            <h4 className="font-semibold text-sky-400 mb-1">Number Formats</h4>
+            <ul className="list-disc list-inside ml-2 space-y-1">
+              <li>Hexadecimal: <code>$FF</code>, <code>$1000</code></li>
+              <li>Decimal: <code>123</code>, <code>255</code></li>
+              <li>Character: <code>'A'</code> (ASCII value)</li>
+              <li>Low/High byte: <code>#&lt;LABEL</code>, <code>#&gt;LABEL</code></li>
+            </ul>
+          </div>
+          
+          <div>
+            <h4 className="font-semibold text-sky-400 mb-1">Addressing Modes</h4>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-xs">
+              <div>
+                <ul className="list-disc list-inside ml-2 space-y-1">
+                  <li><strong>Immediate:</strong> <code>LDA #$FF</code></li>
+                  <li><strong>Zero Page:</strong> <code>LDA $10</code></li>
+                  <li><strong>Zero Page,X:</strong> <code>LDA $10,X</code></li>
+                  <li><strong>Zero Page,Y:</strong> <code>LDX $10,Y</code></li>
+                  <li><strong>Absolute:</strong> <code>LDA $1000</code></li>
+                </ul>
+              </div>
+              <div>
+                <ul className="list-disc list-inside ml-2 space-y-1">
+                  <li><strong>Absolute,X:</strong> <code>LDA $1000,X</code></li>
+                  <li><strong>Absolute,Y:</strong> <code>LDA $1000,Y</code></li>
+                  <li><strong>Indirect:</strong> <code>JMP ($1000)</code></li>
+                  <li><strong>(Indirect,X):</strong> <code>LDA ($10,X)</code></li>
+                  <li><strong>(Indirect),Y:</strong> <code>LDA ($20),Y</code></li>
+                </ul>
+              </div>
+            </div>
+          </div>
+          
+          <div>
+            <h4 className="font-semibold text-sky-400 mb-1">Features</h4>
+            <ul className="list-disc list-inside ml-2 space-y-1">
+              <li>Complete 6502 instruction set with all addressing modes</li>
+              <li>Two-pass assembler with symbol table generation</li>
+              <li>Real-time error reporting with line numbers</li>
+              <li>Sample programs included for learning</li>
+              <li>Copy machine code to clipboard</li>
+            </ul>
+          </div>
+        </div>
       </div>
 
       <footer className="mt-12 text-center text-sm text-gray-500">
